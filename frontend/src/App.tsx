@@ -15,7 +15,20 @@ import {
   UserPlus, 
   Mail, 
   Phone, 
-  IdCard
+  IdCard,
+  ArrowRightLeft,
+  History,
+  Wrench, 
+  CheckCircle,
+  FileText,
+  X,
+  Search, 
+  Laptop, 
+  Printer, 
+  Cpu, 
+  Keyboard, 
+  Mouse, 
+  Smartphone
 } from 'lucide-react';
 // On conserve l'import manuel infaillible que nous avons validé
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
@@ -50,6 +63,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <Link to="/employes" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/employes')}`}>
             <Users size={20} /> Employés
           </Link>
+          <Link to="/mouvements" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/mouvements')}`}>
+            <ArrowRightLeft size={20} /> Mouvements & Traçabilité
+          </Link>
           <Link to="/incidents" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/incidents')}`}>
             <AlertTriangle size={20} /> Incidents & Pannes
           </Link>
@@ -66,126 +82,197 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 // ==========================================
 // 2. LA PAGE TABLEAU DE BORD (CONNECTÉE À L'API)
 // ==========================================
+// ==========================================
+// 2. LA PAGE TABLEAU DE BORD (AVEC RECHERCHE EMPLOYÉ)
+// ==========================================
 const Dashboard = () => {
-  // 1. Déclaration des variables d'état (Mémoire de la page)
-  const [stats, setStats] = useState({
-    equipements: 0,
-    agences: 0,
-    postes: 0,
-    incidents: 0
-  });
+  const [stats, setStats] = useState({ equipements: 0, agences: 0, postes: 0, incidents: 0 });
+  
+  // Nouveaux états pour notre moteur de recherche
+  const [employes, setEmployes] = useState<any[]>([]);
+  const [equipements, setEquipements] = useState<any[]>([]);
+  const [mouvements, setMouvements] = useState<any[]>([]);
+  const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
-  // 2. La fonction qui va chercher les données au démarrage
   useEffect(() => {
     const fetchDonnees = async () => {
       try {
-        // On lance 3 requêtes en même temps vers notre API Python
-        const [reqEquipements, reqAgences, reqPostes] = await Promise.all([
+        const [reqEq, reqAg, reqPo, reqEmp, reqMv] = await Promise.all([
           fetch('http://localhost:8000/equipements/'),
           fetch('http://localhost:8000/agences/'),
-          fetch('http://localhost:8000/postes/')
+          fetch('http://localhost:8000/postes/'),
+          fetch('http://localhost:8000/employes/'),
+          fetch('http://localhost:8000/mouvements/')
         ]);
 
-        // On transforme les réponses en données lisibles (JSON)
-        const equipements = await reqEquipements.json();
-        const agences = await reqAgences.json();
-        const postes = await reqPostes.json();
+        const eqData = await reqEq.json();
+        const agData = await reqAg.json();
+        const poData = await reqPo.json();
+        const empData = await reqEmp.json();
+        const mvData = await reqMv.json();
 
-        // On compte les incidents (tous les équipements qui ont le statut "En panne")
-        const compteIncidents = equipements.filter((eq: any) => eq.statut === "En panne").length;
+        setEquipements(eqData);
+        setEmployes(empData);
+        setMouvements(mvData);
 
-        // On met à jour notre page avec les vrais chiffres
+        const compteIncidents = eqData.filter((eq: any) => eq.statut === "En panne").length;
+
         setStats({
-          equipements: equipements.length,
-          agences: agences.length,
-          postes: postes.length,
+          equipements: eqData.length,
+          agences: agData.length,
+          postes: poData.length,
           incidents: compteIncidents
         });
         
-        setLoading(false); // Fin du chargement
-      } catch (error) {
-        console.error("Erreur de connexion à l'API:", error);
         setLoading(false);
-      }
+      } catch (error) { console.error(error); setLoading(false); }
     };
-
     fetchDonnees();
-  }, []); // Le tableau vide [] signifie qu'on fait ça 1 seule fois au chargement de la page
+  }, []);
 
-  // Si on est en train de chercher les données, on affiche un cercle qui tourne
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-500">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-500 mb-4" />
-        <p>Connexion à la base de données SQLite en cours...</p>
-      </div>
-    );
-  }
+  // Logique pour trouver le matériel de l'employé sélectionné
+  const getEquipementsEmploye = () => {
+    if (!selectedEmpId) return [];
+    const emp = employes.find(e => e.id === parseInt(selectedEmpId));
+    if (!emp) return [];
+    
+    const nomComplet = `${emp.nom} ${emp.prenom}`;
+    
+    // On cherche les équipements "Affectés" dont le dernier mouvement a pour destination ce nom
+    return equipements.filter(eq => {
+      if (eq.statut !== 'Affecté') return false;
+      const eqMvs = mouvements.filter(m => m.equipement_id === eq.id);
+      // Le premier de la liste est le plus récent (car order_by desc dans le backend)
+      const dernierMv = eqMvs[0];
+      return dernierMv && dernierMv.destination === nomComplet;
+    });
+  };
+
+  const equipementsActuels = getEquipementsEmploye();
+  const employeSelectionne = employes.find(e => e.id === parseInt(selectedEmpId));
+
+  // Associer une icône à une catégorie
+  const getIconeCategorie = (categorie: string) => {
+    const cat = categorie.toLowerCase();
+    if (cat.includes('écran')) return <MonitorSmartphone size={32} className="text-slate-400" />;
+    if (cat.includes('centrale')) return <Cpu size={32} className="text-slate-400" />;
+    if (cat.includes('imprimante')) return <Printer size={32} className="text-slate-400" />;
+    if (cat.includes('clavier')) return <Keyboard size={32} className="text-slate-400" />;
+    if (cat.includes('souris')) return <Mouse size={32} className="text-slate-400" />;
+    if (cat.includes('portable')) return <Laptop size={32} className="text-slate-400" />;
+    if (cat.includes('téléphone')) return <Smartphone size={32} className="text-slate-400" />;
+    return <MonitorSmartphone size={32} className="text-slate-400" />; // Défaut
+  };
+
+  if (loading) return <div className="flex justify-center h-full items-center"><Loader2 className="animate-spin text-blue-500"/></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Tableau de bord</h1>
         <p className="text-slate-500 mt-1">Données en temps réel de votre parc informatique.</p>
       </div>
       
-      {/* Les 4 cartes avec les VRAIES données et de grosses icônes colorées */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
-        
-        <Card className="shadow-sm border-slate-200 hover:shadow-md transition-all">
+      {/* 1. LES 4 CARTES STATISTIQUES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Équipements</CardTitle>
-            <div className="bg-blue-100 p-2 rounded-full">
-              <MonitorSmartphone className="h-6 w-6 text-blue-600" />
-            </div>
+            <div className="bg-blue-100 p-2 rounded-full"><MonitorSmartphone className="h-6 w-6 text-blue-600" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-slate-900">{stats.equipements}</div>
-            <p className="text-xs text-slate-500 mt-2 font-medium">Enregistrés dans le système</p>
-          </CardContent>
+          <CardContent><div className="text-4xl font-black text-slate-900">{stats.equipements}</div></CardContent>
         </Card>
 
-        <Card className="shadow-sm border-slate-200 hover:shadow-md transition-all">
+        <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Agences</CardTitle>
-            <div className="bg-emerald-100 p-2 rounded-full">
-              <Building2 className="h-6 w-6 text-emerald-600" />
-            </div>
+            <div className="bg-emerald-100 p-2 rounded-full"><Building2 className="h-6 w-6 text-emerald-600" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-slate-900">{stats.agences}</div>
-            <p className="text-xs text-slate-500 mt-2 font-medium">Connectées au réseau</p>
-          </CardContent>
+          <CardContent><div className="text-4xl font-black text-slate-900">{stats.agences}</div></CardContent>
         </Card>
 
-        <Card className="shadow-sm border-slate-200 hover:shadow-md transition-all">
+        <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Postes de travail</CardTitle>
-            <div className="bg-amber-100 p-2 rounded-full">
-              <Users className="h-6 w-6 text-amber-600" />
-            </div>
+            <div className="bg-amber-100 p-2 rounded-full"><Briefcase className="h-6 w-6 text-amber-600" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-slate-900">{stats.postes}</div>
-            <p className="text-xs text-slate-500 mt-2 font-medium">Créés dans les départements</p>
-          </CardContent>
+          <CardContent><div className="text-4xl font-black text-slate-900">{stats.postes}</div></CardContent>
         </Card>
 
-        <Card className="shadow-sm border-red-200 bg-red-50 hover:shadow-md transition-all">
+        <Card className="shadow-sm border-red-200 bg-red-50">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-red-700 uppercase tracking-wider">Équipements en Panne</CardTitle>
-            <div className="bg-red-200 p-2 rounded-full">
-              <AlertTriangle className="h-6 w-6 text-red-700" />
-            </div>
+            <CardTitle className="text-sm font-bold text-red-700 uppercase tracking-wider">Pannes en cours</CardTitle>
+            <div className="bg-red-200 p-2 rounded-full"><AlertTriangle className="h-6 w-6 text-red-700" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-red-700">{stats.incidents}</div>
-            <p className="text-xs text-red-600 mt-2 font-medium">Intervention requise</p>
-          </CardContent>
+          <CardContent><div className="text-4xl font-black text-red-700">{stats.incidents}</div></CardContent>
         </Card>
-
       </div>
+
+      {/* 2. LE MOTEUR DE RECHERCHE EMPLOYÉ (MAGIE UX) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Search size={20} className="text-blue-500"/> Audit du Matériel par Employé</h2>
+            <p className="text-sm text-slate-500">Sélectionnez un collaborateur pour voir son dotation actuelle.</p>
+          </div>
+          
+          <select 
+            className="w-full md:w-72 p-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-medium"
+            value={selectedEmpId}
+            onChange={(e) => setSelectedEmpId(e.target.value)}
+          >
+            <option value="">-- Rechercher un employé --</option>
+            {employes.filter(e => e.statut === 'Actif').map(emp => (
+              <option key={emp.id} value={emp.id}>{emp.nom} {emp.prenom} ({emp.matricule})</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedEmpId ? (
+          <div className="p-6 bg-slate-50/50">
+            <div className="flex items-center gap-4 mb-6 pb-6 border-b border-slate-200">
+              <div className="h-12 w-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xl">
+                {employeSelectionne?.nom[0]}{employeSelectionne?.prenom[0]}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{employeSelectionne?.nom} {employeSelectionne?.prenom}</h3>
+                <p className="text-sm text-slate-500 font-mono">{employeSelectionne?.matricule} • {employeSelectionne?.email}</p>
+              </div>
+            </div>
+
+            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Matériel en sa possession ({equipementsActuels.length})</h4>
+            
+            {equipementsActuels.length === 0 ? (
+              <div className="text-center py-10 bg-white rounded-lg border border-dashed border-slate-300 text-slate-400">
+                Aucun équipement affecté à cet employé actuellement.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {equipementsActuels.map(eq => (
+                  <div key={eq.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex items-start gap-4 hover:border-blue-300 transition-colors">
+                    <div className="p-3 bg-slate-50 rounded-lg shrink-0">
+                      {getIconeCategorie(eq.categorie)}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-blue-600 mb-1">{eq.categorie}</div>
+                      <div className="font-bold text-slate-800 text-sm">{eq.marque} {eq.modele}</div>
+                      <div className="text-xs font-mono text-slate-400 mt-2 border-t border-slate-100 pt-1">
+                        S/N: {eq.numero_serie}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-10 text-center text-slate-400 bg-white">
+            Utilisez le menu déroulant ci-dessus pour afficher la dotation d'un employé.
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };
@@ -393,64 +480,73 @@ const Agences = () => {
 // ==========================================
 // 3. LA PAGE DE GESTION DES ÉQUIPEMENTS
 // ==========================================
+// ==========================================
+// 3. LA PAGE DE GESTION DES ÉQUIPEMENTS (VERSION FINALE)
+// ==========================================
 const Equipements = () => {
   const [equipements, setEquipements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // L'état de notre formulaire d'ajout
+  // État du formulaire d'ajout
   const [nouveau, setNouveau] = useState({
-    reference: '', numero_serie: '', marque: '', modele: '', categorie: 'Unité Centrale'
+    reference: '', numero_serie: '', marque: '', modele: '', categorie: ''
   });
 
-  // Fonction pour charger la liste
+  // --- NOUVEAU : ÉTATS POUR LA FICHE DÉTAILLÉE (MODALE) ---
+  const [equipementSelectionne, setEquipementSelectionne] = useState<any>(null);
+  const [historiqueMv, setHistoriqueMv] = useState<any[]>([]);
+  const [historiqueInc, setHistoriqueInc] = useState<any[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
   const chargerEquipements = async () => {
     try {
       const reponse = await fetch('http://localhost:8000/equipements/');
-      const data = await reponse.json();
-      setEquipements(data);
+      setEquipements(await reponse.json());
       setLoading(false);
-    } catch (error) {
-      console.error("Erreur de chargement:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
-  useEffect(() => {
-    chargerEquipements();
-  }, []);
+  useEffect(() => { chargerEquipements(); }, []);
 
-  // Fonction pour envoyer le formulaire
   const ajouterEquipement = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
     try {
-      const reponse = await fetch('http://localhost:8000/equipements/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nouveau)
+      const res = await fetch('http://localhost:8000/equipements/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouveau)
       });
-
-      if (reponse.ok) {
-        // On vide le formulaire
-        setNouveau({ reference: '', numero_serie: '', marque: '', modele: '', categorie: 'Unité Centrale' });
-        // On recharge le tableau pour voir la nouvelle machine !
-        await chargerEquipements();
+      if (res.ok) {
+        setNouveau({ reference: '', numero_serie: '', marque: '', modele: '', categorie: '' });
+        chargerEquipements();
       } else {
-        const error = await reponse.json();
-        alert("Erreur : " + error.detail);
+        const err = await res.json(); alert("Erreur : " + err.detail);
       }
-    } catch (error) {
-      console.error("Erreur d'ajout:", error);
-    }
+    } catch (error) { console.error(error); }
     setIsSubmitting(false);
   };
 
-  // Fonction pour colorer les statuts joliment
+  // --- NOUVEAU : OUVRIR LA FICHE D'UN ÉQUIPEMENT ---
+  const ouvrirFiche = async (eq: any) => {
+    setEquipementSelectionne(eq);
+    setLoadingDetails(true);
+    try {
+      // On va chercher l'historique spécifique à CET équipement
+      const [resMv, resInc] = await Promise.all([
+        fetch(`http://localhost:8000/equipements/${eq.id}/mouvements/`),
+        fetch(`http://localhost:8000/equipements/${eq.id}/incidents/`)
+      ]);
+      if(resMv.ok) setHistoriqueMv(await resMv.json());
+      if(resInc.ok) setHistoriqueInc(await resInc.json());
+    } catch(e) { console.error(e); }
+    setLoadingDetails(false);
+  };
+
   const getStatutBadge = (statut: string) => {
     switch(statut) {
       case 'En stock': return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">En stock</span>;
       case 'En panne': return <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">En panne</span>;
+      case 'Mis au rebut': return <span className="px-2 py-1 bg-slate-800 text-slate-200 rounded text-xs font-bold">Mis au rebut</span>;
       case 'En réparation externe': return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">En réparation</span>;
       default: return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">{statut}</span>;
     }
@@ -460,7 +556,7 @@ const Equipements = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Inventaire du Parc</h1>
-        <p className="text-slate-500 mt-1">Gérez l'ensemble des équipements et du matériel informatique.</p>
+        <p className="text-slate-500 mt-1">Gérez l'ensemble des équipements et consultez leur dossier technique.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -468,117 +564,133 @@ const Equipements = () => {
         {/* COLONNE GAUCHE : LE FORMULAIRE D'AJOUT */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
           <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <MonitorSmartphone size={20} className="text-blue-600" />
-            Nouvel Équipement
+            <MonitorSmartphone size={20} className="text-blue-600" /> Nouvel Équipement
           </h2>
-          
           <form onSubmit={ajouterEquipement} className="space-y-4">
-             <div>
-  <label className="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
-  <input 
-    type="text"
-    list="categories-list"
-    placeholder="Sélectionnez ou tapez librement..."
-    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
-    value={nouveau.categorie}
-    onChange={(e) => setNouveau({...nouveau, categorie: e.target.value})}
-    required
-  />
-  <datalist id="categories-list">
-    <option value="Unité Centrale" />
-    <option value="Écran" />
-    <option value="Clavier" />
-    <option value="Souris" />
-    <option value="Imprimante" />
-    <option value="Téléphone IP" />
-    <option value="Tablette" />
-    <option value="Câbles Réseaux" />
-  </datalist>
-</div>
-            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
+              <input required type="text" list="categories-list" placeholder="Sélectionnez ou tapez..." className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.categorie} onChange={(e) => setNouveau({...nouveau, categorie: e.target.value})} />
+              <datalist id="categories-list">
+                <option value="Unité Centrale" /> <option value="Écran" /> <option value="Imprimante" /> <option value="Téléphone IP" /> <option value="Switch / Routeur" />
+              </datalist>
+            </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Marque</label>
-                <input required type="text" placeholder="Ex: HP" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50"
-                  value={nouveau.marque} onChange={(e) => setNouveau({...nouveau, marque: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Modèle</label>
-                <input required type="text" placeholder="Ex: ProDesk" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50"
-                  value={nouveau.modele} onChange={(e) => setNouveau({...nouveau, modele: e.target.value})} />
-              </div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Marque</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.marque} onChange={(e) => setNouveau({...nouveau, marque: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Modèle</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.modele} onChange={(e) => setNouveau({...nouveau, modele: e.target.value})} /></div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Numéro de Série (S/N)</label>
-              <input required type="text" placeholder="Scannez ou saisissez" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm"
-                value={nouveau.numero_serie} onChange={(e) => setNouveau({...nouveau, numero_serie: e.target.value})} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Référence Interne</label>
-              <input required type="text" placeholder="Ex: PC-CAISSE-01" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm"
-                value={nouveau.reference} onChange={(e) => setNouveau({...nouveau, reference: e.target.value})} />
-            </div>
-
-            <button 
-              disabled={isSubmitting}
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors mt-4 flex justify-center items-center gap-2"
-            >
-              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : null}
-              Enregistrer l'équipement
-            </button>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Numéro de Série (S/N)</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm" value={nouveau.numero_serie} onChange={(e) => setNouveau({...nouveau, numero_serie: e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Référence Interne</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm" value={nouveau.reference} onChange={(e) => setNouveau({...nouveau, reference: e.target.value})} /></div>
+            <button disabled={isSubmitting} type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors mt-4">Enregistrer l'équipement</button>
           </form>
         </div>
 
         {/* COLONNE DROITE : LE TABLEAU D'INVENTAIRE */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-fit">
           <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
             <h2 className="font-bold text-slate-800">Liste du matériel</h2>
-            <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
-              {equipements.length} au total
-            </span>
+            <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2 py-1 rounded-full">{equipements.length} au total</span>
           </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-4">Réf & S/N</th>
-                  <th className="p-4">Type</th>
-                  <th className="p-4">Marque/Modèle</th>
-                  <th className="p-4">Statut</th>
-                </tr>
+          <div className="overflow-x-auto max-h-[600px]">
+            <table className="w-full text-left text-sm text-slate-600 relative">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200 sticky top-0">
+                <tr><th className="p-4">Réf & S/N</th><th className="p-4">Type</th><th className="p-4">Statut</th><th className="p-4 text-right">Dossier</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chargement...</td></tr>
-                ) : equipements.length === 0 ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Aucun équipement enregistré.</td></tr>
-                ) : (
-                  equipements.map((eq) => (
-                    <tr key={eq.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4">
-                        <div className="font-bold text-slate-800">{eq.reference}</div>
-                        <div className="font-mono text-xs text-slate-400 mt-1">{eq.numero_serie}</div>
-                      </td>
-                      <td className="p-4 font-medium">{eq.categorie}</td>
-                      <td className="p-4">
-                        {eq.marque} <span className="text-slate-400">{eq.modele}</span>
-                      </td>
-                      <td className="p-4">
-                        {getStatutBadge(eq.statut)}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {loading ? <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chargement...</td></tr> : equipements.map((eq) => (
+                  <tr key={eq.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-4"><div className="font-bold text-slate-800">{eq.reference}</div><div className="font-mono text-xs text-slate-400 mt-1">{eq.numero_serie}</div></td>
+                    <td className="p-4"><div className="font-medium text-slate-900">{eq.categorie}</div><div className="text-xs text-slate-500">{eq.marque} {eq.modele}</div></td>
+                    <td className="p-4">{getStatutBadge(eq.statut)}</td>
+                    <td className="p-4 text-right">
+                      {/* LE BOUTON MAGIQUE */}
+                      <button onClick={() => ouvrirFiche(eq)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors flex items-center gap-2 ml-auto text-xs font-bold">
+                        <FileText size={16}/> Fiche
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
-
       </div>
+
+      {/* ========================================== */}
+      {/* LA FENÊTRE MODALE (CARNET DE SANTÉ)        */}
+      {/* ========================================== */}
+      {equipementSelectionne && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            {/* EN-TÊTE DE LA MODALE */}
+            <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                  <MonitorSmartphone className="text-blue-600" />
+                  {equipementSelectionne.reference}
+                </h2>
+                <div className="flex gap-4 mt-2 text-sm text-slate-500">
+                  <span><strong className="text-slate-700">S/N:</strong> {equipementSelectionne.numero_serie}</span>
+                  <span><strong className="text-slate-700">Marque:</strong> {equipementSelectionne.marque} {equipementSelectionne.modele}</span>
+                  <span>{getStatutBadge(equipementSelectionne.statut)}</span>
+                </div>
+              </div>
+              <button onClick={() => setEquipementSelectionne(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* CORPS DE LA MODALE */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-100">
+              {loadingDetails ? (
+                <div className="flex justify-center items-center h-40 text-slate-500"><Loader2 className="animate-spin mr-2"/> Chargement du dossier...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* HISTORIQUE DES MOUVEMENTS */}
+                  <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                    <h3 className="font-bold text-slate-800 p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2"><ArrowRightLeft size={16}/> Affectations & Trajets</h3>
+                    <div className="p-4 space-y-4">
+                      {historiqueMv.length === 0 ? <p className="text-sm text-slate-500">Aucun mouvement.</p> : 
+                        historiqueMv.map(mv => (
+                          <div key={mv.id} className="border-l-2 border-blue-200 pl-3 py-1 relative">
+                            <div className="absolute w-2 h-2 bg-blue-500 rounded-full -left-[5px] top-2"></div>
+                            <p className="text-xs text-slate-400 font-bold mb-1">{new Date(mv.date_mouvement).toLocaleDateString('fr-FR')} • {new Date(mv.date_mouvement).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</p>
+                            <p className="text-sm font-medium text-slate-800">{mv.origine} ➔ {mv.destination}</p>
+                            <p className="text-xs text-slate-500 italic mt-0.5">Motif: {mv.motif}</p>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+
+                  {/* HISTORIQUE DES PANNES */}
+                  <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                    <h3 className="font-bold text-slate-800 p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2"><Wrench size={16}/> Journal des Pannes</h3>
+                    <div className="p-4 space-y-4">
+                      {historiqueInc.length === 0 ? <p className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded border border-emerald-100">Matériel fiable. Aucune panne enregistrée !</p> : 
+                        historiqueInc.map(inc => (
+                          <div key={inc.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-xs font-bold text-slate-500">{new Date(inc.date_panne).toLocaleDateString('fr-FR')}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${inc.statut === 'Résolu' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{inc.statut}</span>
+                            </div>
+                            <p className="text-sm font-medium text-slate-800">{inc.description}</p>
+                            {inc.date_resolution && <p className="text-xs text-emerald-600 mt-2">✅ Réparé le {new Date(inc.date_resolution).toLocaleDateString('fr-FR')}</p>}
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -789,7 +901,405 @@ const Employes = () => {
     </div>
   );
 };
-const Incidents = () => <div><h1 className="text-3xl font-bold text-slate-900">Gestion des Pannes</h1></div>;
+
+// ==========================================
+// 6. LA PAGE DES MOUVEMENTS ET AFFECTATIONS
+// ==========================================
+const Mouvements = () => {
+  const [equipements, setEquipements] = useState<any[]>([]);
+  const [mouvements, setMouvements] = useState<any[]>([]);
+  const [employes, setEmployes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const initialForm = { equipement_id: '', origine: '', destination: '', motif: '', utilisateur: 'Admin' };
+  const [form, setForm] = useState(initialForm);
+
+  const chargerDonnees = async () => {
+    try {
+      const [resEq, resMv, resEmp] = await Promise.all([
+        fetch('http://localhost:8000/equipements/'),
+        fetch('http://localhost:8000/mouvements/'),
+        fetch('http://localhost:8000/employes/')
+      ]);
+      setEquipements(await resEq.json());
+      setMouvements(await resMv.json());
+      setEmployes(await resEmp.json());
+      setLoading(false);
+    } catch (error) { console.error(error); }
+  };
+
+  useEffect(() => { chargerDonnees(); }, []);
+
+  // Magie UX : Pré-remplir automatiquement l'origine
+  useEffect(() => {
+    if (form.equipement_id) {
+      const eqId = parseInt(form.equipement_id);
+      const eq = equipements.find(e => e.id === eqId);
+      const derniersMv = mouvements.filter(m => m.equipement_id === eqId);
+      
+      if (derniersMv.length > 0) {
+        setForm(prev => ({ ...prev, origine: derniersMv[0].destination }));
+      } else {
+        setForm(prev => ({ ...prev, origine: eq?.statut === 'En stock' ? 'Stock Agence' : 'Inconnu' }));
+      }
+    }
+  }, [form.equipement_id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const res = await fetch('http://localhost:8000/mouvements/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...form,
+        equipement_id: parseInt(form.equipement_id)
+      })
+    });
+    if (res.ok) {
+      setForm(initialForm);
+      chargerDonnees(); // Recharge tout pour mettre à jour les statuts
+    } else {
+      const err = await res.json();
+      alert("Erreur : " + err.detail);
+    }
+    setIsSubmitting(false);
+  };
+
+  const getEquipementBadge = (statut: string) => {
+    if (statut === 'En stock') return <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-xs font-bold">En stock</span>;
+    if (statut === 'En panne' || statut === 'En réparation externe') return <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded text-xs font-bold">{statut}</span>;
+    return <span className="text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-xs font-bold">{statut}</span>;
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">Affectations & Mouvements</h1>
+        <p className="text-slate-500 mt-1">Transférez le matériel, affectez-le aux employés ou renvoyez-le en stock.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* FORMULAIRE DE MOUVEMENT */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <ArrowRightLeft size={20} className="text-blue-600" />
+            Nouveau Mouvement
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">1. L'équipement concerné</label>
+              <select required className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={form.equipement_id} onChange={(e) => setForm({...form, equipement_id: e.target.value})}>
+                <option value="" disabled>Sélectionner une machine...</option>
+                {equipements.map(eq => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.reference} - {eq.marque} {eq.modele} ({eq.statut})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-4 relative">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Emplacement Actuel (Calculé)</label>
+                <input readOnly type="text" className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 text-sm text-slate-500 cursor-not-allowed" value={form.origine} placeholder="Sélectionnez un équipement d'abord..." />
+              </div>
+              
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-1">
+                <div className="bg-white p-1.5 rounded-full border border-slate-200 shadow-sm"><ArrowRightLeft size={16} className="text-blue-500 rotate-90" /></div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-blue-700 uppercase mb-1">Nouvelle Destination</label>
+                <input required type="text" list="destinations" placeholder="Tapez 'Stock' ou un nom..." className="w-full p-2 border border-blue-300 rounded-md bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" value={form.destination} onChange={(e) => setForm({...form, destination: e.target.value})} />
+                <datalist id="destinations">
+                  <option value="Stock Agence" />
+                  <option value="Centre de Réparation (Douala)" />
+                  <option value="Mise au rebut" />
+                  {employes.filter(e => e.statut === 'Actif').map(emp => (
+                    <option key={emp.id} value={`${emp.nom} ${emp.prenom}`} />
+                  ))}
+                </datalist>
+                <p className="text-[10px] text-slate-500 mt-1">S'il va chez un employé, sélectionnez son nom dans la liste.</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Motif du transfert</label>
+              <input required type="text" list="motifs" placeholder="Ex: Nouvelle affectation" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={form.motif} onChange={(e) => setForm({...form, motif: e.target.value})} />
+              <datalist id="motifs">
+                <option value="Nouvelle affectation" />
+                <option value="Transfert inter-agences" />
+                <option value="Retour en stock (Restitution)" />
+                <option value="Départ en réparation" />
+                <option value="Mise au rebut" />
+              </datalist>
+            </div>
+
+            <button disabled={isSubmitting || !form.equipement_id} type="submit" className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium py-2 px-4 rounded-md transition-colors mt-4">
+              Enregistrer le mouvement
+            </button>
+          </form>
+        </div>
+
+        {/* HISTORIQUE GLOBAL (TABLEAU) */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-fit">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2"><History size={18} className="text-slate-500"/> Journal des Mouvements</h2>
+            <span className="text-xs font-medium bg-slate-200 text-slate-600 px-3 py-1 rounded-full">{mouvements.length} enregistrements</span>
+          </div>
+          
+          <div className="overflow-x-auto max-h-[600px]">
+            <table className="w-full text-left text-sm text-slate-600 relative">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-semibold sticky top-0 border-b border-slate-200 shadow-sm">
+                <tr>
+                  <th className="p-4">Date</th>
+                  <th className="p-4">Équipement</th>
+                  <th className="p-4">Trajet (Origine ➔ Destination)</th>
+                  <th className="p-4">Motif</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chargement...</td></tr>
+                ) : mouvements.length === 0 ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Aucun mouvement enregistré.</td></tr>
+                ) : (
+                  mouvements.map((mv) => {
+                    const eq = equipements.find(e => e.id === mv.equipement_id);
+                    return (
+                      <tr key={mv.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 whitespace-nowrap text-xs">
+                          <span className="font-bold text-slate-700">{new Date(mv.date_mouvement).toLocaleDateString('fr-FR')}</span> <br/>
+                          <span className="text-slate-400">{new Date(mv.date_mouvement).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</span>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-bold text-slate-900">{eq?.reference || 'Machine Supprimée'}</div>
+                          <div className="text-xs mt-1">{getEquipementBadge(eq?.statut || 'Inconnu')}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2 text-xs bg-slate-100 p-1.5 rounded inline-flex">
+                            <span className="text-slate-500 font-medium max-w-[120px] truncate" title={mv.origine}>{mv.origine}</span>
+                            <ArrowRightLeft size={12} className="text-blue-500 shrink-0" />
+                            <span className="font-bold text-slate-800 max-w-[120px] truncate" title={mv.destination}>{mv.destination}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-xs italic text-slate-500">
+                          "{mv.motif}"
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 7. LA PAGE DE GESTION DES INCIDENTS (PANNES)
+// ==========================================
+const Incidents = () => {
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [equipements, setEquipements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const initialForm = { equipement_id: '', description: '', niveau_criticite: 'Moyen' };
+  const [form, setForm] = useState(initialForm);
+
+  const chargerDonnees = async () => {
+    try {
+      const [resInc, resEq] = await Promise.all([
+        fetch('http://localhost:8000/incidents/'),
+        fetch('http://localhost:8000/equipements/') // On charge les équipements pour les afficher
+      ]);
+      
+      // On va s'assurer que l'API des incidents existe bien. 
+      // Si la route globale n'existe pas encore, on va la récupérer équipement par équipement (ou on la créera)
+      if(resInc.ok) {
+        setIncidents(await resInc.json());
+      } else {
+        // Fallback si la route globale n'est pas définie dans main.py
+        setIncidents([]); 
+      }
+      
+      setEquipements(await resEq.json());
+      setLoading(false);
+    } catch (error) { console.error(error); }
+  };
+
+  useEffect(() => { chargerDonnees(); }, []);
+
+  // Déclarer une nouvelle panne
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const res = await fetch('http://localhost:8000/incidents/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...form,
+        equipement_id: parseInt(form.equipement_id)
+      })
+    });
+
+    if (res.ok) {
+      setForm(initialForm);
+      chargerDonnees();
+      alert("Incident déclaré ! L'équipement est maintenant marqué 'En panne'.");
+    } else {
+      const err = await res.json();
+      alert("Erreur : " + err.detail);
+    }
+    setIsSubmitting(false);
+  };
+
+  // Clôturer une panne (Réparation terminée)
+  const resoudreIncident = async (incident_id: number) => {
+    if (!window.confirm("Confirmez-vous que cet équipement est réparé et remis en stock ?")) return;
+
+    const res = await fetch(`http://localhost:8000/incidents/${incident_id}/resoudre`, {
+      method: 'PUT'
+    });
+
+    if (res.ok) {
+      chargerDonnees();
+    } else {
+      const err = await res.json();
+      alert("Erreur : " + err.detail);
+    }
+  };
+
+  const getCriticiteBadge = (niveau: string) => {
+    if (niveau === 'Critique') return <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">Critique</span>;
+    if (niveau === 'Faible') return <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-bold">Faible</span>;
+    return <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">Moyen</span>;
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">Incidents & Pannes</h1>
+        <p className="text-slate-500 mt-1">Déclarez le matériel défectueux et suivez l'avancement des réparations.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* FORMULAIRE DE DÉCLARATION */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+          <h2 className="text-lg font-bold text-red-700 mb-6 flex items-center gap-2">
+            <AlertTriangle size={20} />
+            Déclarer une panne
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Machine concernée</label>
+              <select required className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={form.equipement_id} onChange={(e) => setForm({...form, equipement_id: e.target.value})}>
+                <option value="" disabled>Sélectionner...</option>
+                {equipements.filter(eq => eq.statut !== 'En panne' && eq.statut !== 'Mis au rebut').map(eq => (
+                  <option key={eq.id} value={eq.id}>{eq.reference} - {eq.marque} {eq.modele}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Niveau d'urgence</label>
+              <select className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={form.niveau_criticite} onChange={(e) => setForm({...form, niveau_criticite: e.target.value})}>
+                <option value="Faible">Faible (Ne bloque pas le travail)</option>
+                <option value="Moyen">Moyen (Gênant)</option>
+                <option value="Critique">Critique (Bloquant, ex: Serveur ou Caisse)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description du problème</label>
+              <textarea required rows={4} placeholder="L'écran ne s'allume plus, bip au démarrage..." className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm resize-none" value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} />
+            </div>
+
+            <button disabled={isSubmitting || !form.equipement_id} type="submit" className="w-full bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-medium py-2 px-4 rounded-md transition-colors mt-4">
+              Signaler l'incident
+            </button>
+          </form>
+        </div>
+
+        {/* LISTE DES INCIDENTS */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Incidents en cours */}
+          <div className="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-red-100 bg-red-50 flex justify-between items-center">
+              <h2 className="font-bold text-red-900 flex items-center gap-2"><Wrench size={18}/> En cours de traitement</h2>
+              <span className="text-xs font-bold bg-red-200 text-red-800 px-3 py-1 rounded-full">
+                {incidents.filter(i => i.statut === 'En cours').length}
+              </span>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              {loading ? <p className="text-slate-400 text-center text-sm py-4">Chargement...</p> : 
+               incidents.filter(i => i.statut === 'En cours').length === 0 ? <p className="text-slate-400 text-center text-sm py-4">Aucune panne en cours. Tout fonctionne bien ! 🎉</p> : 
+               incidents.filter(i => i.statut === 'En cours').map(inc => {
+                 const eq = equipements.find(e => e.id === inc.equipement_id);
+                 return (
+                   <div key={inc.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50">
+                     <div>
+                       <div className="flex items-center gap-2 mb-1">
+                         <span className="font-bold text-slate-800">{eq?.reference || "Machine inconnue"}</span>
+                         {getCriticiteBadge(inc.niveau_criticite)}
+                       </div>
+                       <p className="text-sm text-slate-600 italic">"{inc.description}"</p>
+                       <p className="text-xs text-slate-400 mt-2">Déclaré le : {new Date(inc.date_panne).toLocaleDateString('fr-FR')}</p>
+                     </div>
+                     <button onClick={() => resoudreIncident(inc.id)} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors">
+                       <CheckCircle size={16} /> Réparé
+                     </button>
+                   </div>
+                 )
+               })
+              }
+            </div>
+          </div>
+
+          {/* Historique Résolus */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
+              <h2 className="font-bold text-slate-700 flex items-center gap-2"><History size={18}/> Historique des réparations</h2>
+            </div>
+            <div className="p-4 space-y-3 opacity-70">
+              {incidents.filter(i => i.statut === 'Résolu').map(inc => {
+                 const eq = equipements.find(e => e.id === inc.equipement_id);
+                 return (
+                   <div key={inc.id} className="border border-slate-200 p-3 rounded-lg flex justify-between items-center bg-white">
+                     <div>
+                       <div className="font-bold text-slate-600 text-sm">{eq?.reference} - <span className="font-normal">{inc.description}</span></div>
+                       <p className="text-xs text-slate-400 mt-1">
+                         Panne du {new Date(inc.date_panne).toLocaleDateString('fr-FR')} • Résolu le {inc.date_resolution ? new Date(inc.date_resolution).toLocaleDateString('fr-FR') : 'N/A'}
+                       </p>
+                     </div>
+                     <span className="text-emerald-600 font-bold text-xs flex items-center gap-1"><CheckCircle size={14}/> Clôturé</span>
+                   </div>
+                 )
+               })}
+               {incidents.filter(i => i.statut === 'Résolu').length === 0 && !loading && (
+                 <p className="text-slate-400 text-center text-sm py-4">Aucun historique de réparation.</p>
+               )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ==========================================
 // 4. LE ROUTEUR PRINCIPAL
@@ -803,6 +1313,7 @@ export default function App() {
           <Route path="/agences" element={<Agences />} />
           <Route path="/equipements" element={<Equipements />} />
           <Route path="/employes" element={<Employes />} />
+          <Route path="/mouvements" element={<Mouvements />} />
           <Route path="/incidents" element={<Incidents />} />
         </Routes>
       </Layout>

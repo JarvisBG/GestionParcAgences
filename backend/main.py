@@ -140,7 +140,11 @@ def create_mouvement(mouvement: schemas.MouvementCreate, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Équipement non trouvé.")
         
     destination_lower = mouvement.destination.lower()
-    if "douala" in destination_lower or "réparation" in mouvement.motif.lower():
+    
+    # NOUVELLE RÈGLE : Si le mot "rebut" est dans la destination
+    if "rebut" in destination_lower or "destruction" in destination_lower:
+        equipement.statut = "Mis au rebut"
+    elif "douala" in destination_lower or "réparation" in mouvement.motif.lower():
         equipement.statut = "En réparation externe"
     elif "stock" in destination_lower:
         equipement.statut = "En stock"
@@ -291,3 +295,16 @@ def delete_employe(employe_id: int, db: Session = Depends(get_db)):
     db.delete(db_employe)
     db.commit()
     return {"message": "Dossier employé supprimé"}
+
+# ==========================================
+# ROUTE POUR LIRE LE JOURNAL GLOBAL DES MOUVEMENTS
+# ==========================================
+@app.get("/mouvements/", response_model=list[schemas.Mouvement])
+def get_tous_les_mouvements(db: Session = Depends(get_db)):
+    # On récupère les 50 derniers mouvements, du plus récent au plus ancien
+    return db.query(models.Mouvement).order_by(models.Mouvement.id.desc()).limit(50).all()
+
+@app.get("/incidents/", response_model=list[schemas.Incident])
+def get_tous_les_incidents(db: Session = Depends(get_db)):
+    # Récupère tous les incidents du plus récent au plus ancien
+    return db.query(models.Incident).order_by(models.Incident.id.desc()).all()
