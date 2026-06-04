@@ -1,14 +1,19 @@
-# Python
+# Environnement Python
 venv/
 __pycache__/
 *.pyc
+
+# Base de données (Sécurité pour ne pas fuiter les données de la banque)
 *.db
+*.sqlite3
+
+# Frontend React
+frontend/node_modules/
+frontend/dist/
 .env
 
-# Node
-node_modules/
+# Fichiers de compilation et exécutables
+build/
 dist/
-.DS_Store
-
-# Logs
-*.log
+*.exe
+*.spec

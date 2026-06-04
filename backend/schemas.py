@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+from backend.database import Base
 
 # --- SCHEMAS POUR DEPARTEMENT ---
 class DepartementBase(BaseModel):

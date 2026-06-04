@@ -2,8 +2,12 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime
-import models, schemas
-from database import engine, SessionLocal
+from backend import models, schemas
+from backend.database import engine, SessionLocal
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+import sys
 
 # Création des tables
 models.Base.metadata.create_all(bind=engine)
@@ -15,9 +19,9 @@ app = FastAPI(title="Gestion Parc Multi-Agences API")
 # ==========================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Autorise uniquement ton frontend React
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:8123"], # Autorise React
     allow_credentials=True,
-    allow_methods=["*"], # Autorise toutes les actions (GET, POST, etc.)
+    allow_methods=["*"], 
     allow_headers=["*"],
 )
 
@@ -28,9 +32,6 @@ def get_db():
     finally:
         db.close()
 
-@app.get("/")
-def read_root():
-    return {"message": "Super ! L'API du parc informatique est en ligne."}
 
 # ==========================================
 # ROUTES POUR LES AGENCES
@@ -169,7 +170,12 @@ def create_incident(incident: schemas.IncidentCreate, db: Session = Depends(get_
     equipement = db.query(models.Equipement).filter(models.Equipement.id == incident.equipement_id).first()
     if not equipement:
         raise HTTPException(status_code=404, detail="Équipement non trouvé.")
-    equipement.statut = "En panne"
+    
+    # NOUVELLE LOGIQUE : Le statut change SEULEMENT si c'est critique
+    if incident.niveau_criticite == "Critique":
+        equipement.statut = "En panne"
+    # Si c'est Faible ou Moyen, on enregistre l'incident mais on ne touche pas au statut de l'équipement !
+
     nouvel_incident = models.Incident(**incident.dict())
     db.add(nouvel_incident)
     db.commit()
@@ -188,7 +194,10 @@ def resoudre_incident(incident_id: int, db: Session = Depends(get_db)):
     incident.date_resolution = datetime.utcnow()
     
     equipement = db.query(models.Equipement).filter(models.Equipement.id == incident.equipement_id).first()
-    if equipement:
+    
+    # NOUVELLE LOGIQUE : On ne le remet "En stock" que s'il était vraiment "En panne"
+    # S'il était resté "Affecté" (cas d'un incident Faible), il reste "Affecté".
+    if equipement and equipement.statut in ["En panne", "En réparation externe"]:
         equipement.statut = "En stock"
         
     db.commit()
@@ -203,7 +212,6 @@ def get_incidents_equipement(equipement_id: int, db: Session = Depends(get_db)):
 # ==========================================
 # ROUTES DE MODIFICATION ET SUPPRESSION (CRUD COMPLET)
 # ==========================================
-
 @app.put("/agences/{agence_id}")
 def update_agence(agence_id: int, agence: schemas.AgenceCreate, db: Session = Depends(get_db)):
     db_agence = db.query(models.Agence).filter(models.Agence.id == agence_id).first()
@@ -214,7 +222,6 @@ def update_agence(agence_id: int, agence: schemas.AgenceCreate, db: Session = De
 
 @app.delete("/agences/{agence_id}")
 def delete_agence(agence_id: int, db: Session = Depends(get_db)):
-    # SÉCURITÉ : Vérifier si l'agence contient des départements
     if db.query(models.Departement).filter(models.Departement.agence_id == agence_id).first():
         raise HTTPException(status_code=400, detail="Videz d'abord les départements de cette agence.")
     db_agence = db.query(models.Agence).filter(models.Agence.id == agence_id).first()
@@ -232,7 +239,6 @@ def update_departement(dept_id: int, dept: schemas.DepartementCreate, db: Sessio
 
 @app.delete("/departements/{dept_id}")
 def delete_departement(dept_id: int, db: Session = Depends(get_db)):
-    # SÉCURITÉ : Vérifier si le département contient des postes
     if db.query(models.Poste).filter(models.Poste.departement_id == dept_id).first():
         raise HTTPException(status_code=400, detail="Videz d'abord les postes de ce département.")
     db_dept = db.query(models.Departement).filter(models.Departement.id == dept_id).first()
@@ -250,7 +256,6 @@ def update_poste(poste_id: int, poste: schemas.PosteCreate, db: Session = Depend
 
 @app.delete("/postes/{poste_id}")
 def delete_poste(poste_id: int, db: Session = Depends(get_db)):
-    # SÉCURITÉ : On ne supprime pas un poste si quelqu'un l'occupe !
     if db.query(models.Employe).filter(models.Employe.poste_id == poste_id).first():
         raise HTTPException(status_code=400, detail="Un employé occupe ce poste. Détachez-le d'abord.")
     db_poste = db.query(models.Poste).filter(models.Poste.id == poste_id).first()
@@ -258,23 +263,17 @@ def delete_poste(poste_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Poste supprimé"}
 
-# ==========================================
-# ROUTES DE MODIFICATION DES EMPLOYÉS
-# ==========================================
-
 @app.put("/employes/{employe_id}")
 def update_employe(employe_id: int, employe: schemas.EmployeCreate, db: Session = Depends(get_db)):
     db_employe = db.query(models.Employe).filter(models.Employe.id == employe_id).first()
     if not db_employe:
         raise HTTPException(status_code=404, detail="Employé non trouvé")
 
-    # RÈGLE MÉTIER : Si l'employé part, on libère automatiquement son poste
     if employe.statut in ["Démissionnaire", "Licencié"]:
         db_employe.poste_id = None
     else:
         db_employe.poste_id = employe.poste_id
 
-    # Mise à jour des autres informations
     db_employe.nom = employe.nom
     db_employe.prenom = employe.prenom
     db_employe.matricule = employe.matricule
@@ -296,15 +295,53 @@ def delete_employe(employe_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Dossier employé supprimé"}
 
-# ==========================================
-# ROUTE POUR LIRE LE JOURNAL GLOBAL DES MOUVEMENTS
-# ==========================================
 @app.get("/mouvements/", response_model=list[schemas.Mouvement])
 def get_tous_les_mouvements(db: Session = Depends(get_db)):
-    # On récupère les 50 derniers mouvements, du plus récent au plus ancien
     return db.query(models.Mouvement).order_by(models.Mouvement.id.desc()).limit(50).all()
 
 @app.get("/incidents/", response_model=list[schemas.Incident])
 def get_tous_les_incidents(db: Session = Depends(get_db)):
-    # Récupère tous les incidents du plus récent au plus ancien
     return db.query(models.Incident).order_by(models.Incident.id.desc()).all()
+
+@app.put("/equipements/{equipement_id}", response_model=schemas.Equipement)
+def update_equipement(equipement_id: int, equipement: schemas.EquipementCreate, db: Session = Depends(get_db)):
+    db_equip = db.query(models.Equipement).filter(models.Equipement.id == equipement_id).first()
+    if not db_equip:
+        raise HTTPException(status_code=404, detail="Équipement non trouvé.")
+    
+    db_equip.reference = equipement.reference
+    db_equip.numero_serie = equipement.numero_serie
+    db_equip.marque = equipement.marque
+    db_equip.modele = equipement.modele
+    db_equip.categorie = equipement.categorie
+    
+    db.commit()
+    db.refresh(db_equip)
+    return db_equip
+
+# ==========================================
+# GESTION DU FRONTEND REACT (POUR LE .EXE)
+# ==========================================
+# IMPORTANT : Ce bloc doit absolument rester à la toute fin du fichier !
+
+# Gestion du chemin vers le dossier 'dist' de React
+if getattr(sys, 'frozen', False):
+    # Mode exécutable (.exe)
+    BASE_DIR = sys._MEIPASS
+else:
+    # Mode développement
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+
+if os.path.exists(FRONTEND_DIST):
+    # 1. On sert les fichiers statiques (CSS/JS)
+    assets_path = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+    # 2. Le "Catch-All" (Doit rester la toute dernière route)
+    # Permet de rediriger la racine "/" et toutes les autres routes (ex: /employes) vers React
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))

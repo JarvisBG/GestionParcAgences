@@ -28,9 +28,11 @@ import {
   Cpu, 
   Keyboard, 
   Mouse, 
-  Smartphone
+  Smartphone,
+  Usb, 
+  Cable, 
+  BatteryCharging
 } from 'lucide-react';
-// On conserve l'import manuel infaillible que nous avons validé
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 
 // ==========================================
@@ -80,15 +82,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 };
 
 // ==========================================
-// 2. LA PAGE TABLEAU DE BORD (CONNECTÉE À L'API)
-// ==========================================
-// ==========================================
-// 2. LA PAGE TABLEAU DE BORD (AVEC RECHERCHE EMPLOYÉ)
+// 2. LA PAGE TABLEAU DE BORD 
 // ==========================================
 const Dashboard = () => {
   const [stats, setStats] = useState({ equipements: 0, agences: 0, postes: 0, incidents: 0 });
   
-  // Nouveaux états pour notre moteur de recherche
   const [employes, setEmployes] = useState<any[]>([]);
   const [equipements, setEquipements] = useState<any[]>([]);
   const [mouvements, setMouvements] = useState<any[]>([]);
@@ -99,11 +97,11 @@ const Dashboard = () => {
     const fetchDonnees = async () => {
       try {
         const [reqEq, reqAg, reqPo, reqEmp, reqMv] = await Promise.all([
-          fetch('http://localhost:8000/equipements/'),
-          fetch('http://localhost:8000/agences/'),
-          fetch('http://localhost:8000/postes/'),
-          fetch('http://localhost:8000/employes/'),
-          fetch('http://localhost:8000/mouvements/')
+          fetch('http://127.0.0.1:8123/equipements/'),
+          fetch('http://127.0.0.1:8123/agences/'),
+          fetch('http://127.0.0.1:8123/postes/'),
+          fetch('http://127.0.0.1:8123/employes/'),
+          fetch('http://127.0.0.1:8123/mouvements/')
         ]);
 
         const eqData = await reqEq.json();
@@ -117,9 +115,10 @@ const Dashboard = () => {
         setMouvements(mvData);
 
         const compteIncidents = eqData.filter((eq: any) => eq.statut === "En panne").length;
+        const equipementsActifs = eqData.filter((eq: any) => eq.statut !== "Mis au rebut");
 
         setStats({
-          equipements: eqData.length,
+          equipements: equipementsActifs.length,
           agences: agData.length,
           postes: poData.length,
           incidents: compteIncidents
@@ -131,7 +130,6 @@ const Dashboard = () => {
     fetchDonnees();
   }, []);
 
-  // Logique pour trouver le matériel de l'employé sélectionné
   const getEquipementsEmploye = () => {
     if (!selectedEmpId) return [];
     const emp = employes.find(e => e.id === parseInt(selectedEmpId));
@@ -139,11 +137,9 @@ const Dashboard = () => {
     
     const nomComplet = `${emp.nom} ${emp.prenom}`;
     
-    // On cherche les équipements "Affectés" dont le dernier mouvement a pour destination ce nom
     return equipements.filter(eq => {
       if (eq.statut !== 'Affecté') return false;
       const eqMvs = mouvements.filter(m => m.equipement_id === eq.id);
-      // Le premier de la liste est le plus récent (car order_by desc dans le backend)
       const dernierMv = eqMvs[0];
       return dernierMv && dernierMv.destination === nomComplet;
     });
@@ -152,7 +148,6 @@ const Dashboard = () => {
   const equipementsActuels = getEquipementsEmploye();
   const employeSelectionne = employes.find(e => e.id === parseInt(selectedEmpId));
 
-  // Associer une icône à une catégorie
   const getIconeCategorie = (categorie: string) => {
     const cat = categorie.toLowerCase();
     if (cat.includes('écran')) return <MonitorSmartphone size={32} className="text-slate-400" />;
@@ -162,7 +157,10 @@ const Dashboard = () => {
     if (cat.includes('souris')) return <Mouse size={32} className="text-slate-400" />;
     if (cat.includes('portable')) return <Laptop size={32} className="text-slate-400" />;
     if (cat.includes('téléphone')) return <Smartphone size={32} className="text-slate-400" />;
-    return <MonitorSmartphone size={32} className="text-slate-400" />; // Défaut
+    if (cat.includes("usb")) return <Usb size={16} className="text-slate-500" />;
+    if (cat.includes("cable") || cat.includes("câble")) return <Cable size={16} className="text-slate-500" />;
+    if (cat.includes("chargeur") || cat.includes("alimentation")) return <BatteryCharging size={16} className="text-amber-500" />;
+    return <MonitorSmartphone size={32} className="text-slate-400" />;
   };
 
   if (loading) return <div className="flex justify-center h-full items-center"><Loader2 className="animate-spin text-blue-500"/></div>;
@@ -174,7 +172,6 @@ const Dashboard = () => {
         <p className="text-slate-500 mt-1">Données en temps réel de votre parc informatique.</p>
       </div>
       
-      {/* 1. LES 4 CARTES STATISTIQUES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -209,12 +206,11 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* 2. LE MOTEUR DE RECHERCHE EMPLOYÉ (MAGIE UX) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Search size={20} className="text-blue-500"/> Audit du Matériel par Employé</h2>
-            <p className="text-sm text-slate-500">Sélectionnez un collaborateur pour voir son dotation actuelle.</p>
+            <p className="text-sm text-slate-500">Sélectionnez un collaborateur pour voir sa dotation actuelle.</p>
           </div>
           
           <select 
@@ -278,14 +274,6 @@ const Dashboard = () => {
 };
 
 // ==========================================
-// 3. PAGES TEMPORAIRES
-// ==========================================
-// ==========================================
-// 4. LA PAGE GESTION DES AGENCES ET POSTES
-// ==========================================
-
-
-// ==========================================
 // 4. LA PAGE GESTION DES AGENCES ET POSTES
 // ==========================================
 const Agences = () => {
@@ -301,9 +289,9 @@ const Agences = () => {
   const chargerStructure = async () => {
     try {
       const [resAgences, resDepts, resPostes] = await Promise.all([
-        fetch('http://localhost:8000/agences/'),
-        fetch('http://localhost:8000/departements/'),
-        fetch('http://localhost:8000/postes/')
+        fetch('http://127.0.0.1:8123/agences/'),
+        fetch('http://127.0.0.1:8123/departements/'),
+        fetch('http://127.0.0.1:8123/postes/')
       ]);
       setAgences(await resAgences.json());
       setDepartements(await resDepts.json());
@@ -316,25 +304,23 @@ const Agences = () => {
 
   useEffect(() => { chargerStructure(); }, []);
 
-  // --- ACTIONS D'AJOUT ---
   const ajouterAgence = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://localhost:8000/agences/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouvelleAgence) });
+    await fetch('http://127.0.0.1:8123/agences/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouvelleAgence) });
     setNouvelleAgence({ nom: '' }); chargerStructure();
   };
   const ajouterDepartement = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://localhost:8000/departements/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom: nouveauDept.nom, agence_id: parseInt(nouveauDept.agence_id) }) });
+    await fetch('http://127.0.0.1:8123/departements/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom: nouveauDept.nom, agence_id: parseInt(nouveauDept.agence_id) }) });
     setNouveauDept({ nom: '', agence_id: '' }); chargerStructure();
   };
   const ajouterPoste = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://localhost:8000/postes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titre: nouveauPoste.titre, departement_id: parseInt(nouveauPoste.departement_id) }) });
+    await fetch('http://127.0.0.1:8123/postes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titre: nouveauPoste.titre, departement_id: parseInt(nouveauPoste.departement_id) }) });
     setNouveauPoste({ titre: '', departement_id: '' }); chargerStructure();
   };
 
-  // --- ACTIONS DE MODIFICATION ---
-  const modifierItem = async (type: string, id: int, nomActuel: string, dataSupplementaire: any = {}) => {
+  const modifierItem = async (type: string, id: number, nomActuel: string, dataSupplementaire: any = {}) => {
     const nouveauNom = window.prompt("Modifier le nom :", nomActuel);
     if (!nouveauNom || nouveauNom === nomActuel) return;
 
@@ -343,7 +329,7 @@ const Agences = () => {
     if (type === 'departements') bodyData = { nom: nouveauNom, agence_id: dataSupplementaire.agence_id };
     if (type === 'postes') bodyData = { titre: nouveauNom, departement_id: dataSupplementaire.departement_id };
 
-    await fetch(`http://localhost:8000/${type}/${id}`, {
+    await fetch(`http://127.0.0.1:8123/${type}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bodyData)
@@ -351,11 +337,10 @@ const Agences = () => {
     chargerStructure();
   };
 
-  // --- ACTIONS DE SUPPRESSION ---
-  const supprimerItem = async (type: string, id: int) => {
+  const supprimerItem = async (type: string, id: number) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet élément ?")) return;
     
-    const res = await fetch(`http://localhost:8000/${type}/${id}`, { method: 'DELETE' });
+    const res = await fetch(`http://127.0.0.1:8123/${type}/${id}`, { method: 'DELETE' });
     if (res.ok) {
       chargerStructure();
     } else {
@@ -372,9 +357,7 @@ const Agences = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
         <div className="space-y-6">
-          {/* Formulaires d'ajout (inchangés visuellement) */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2 uppercase tracking-wider"><Building2 size={16} className="text-emerald-600" /> 1. Créer une Agence</h2>
             <form onSubmit={ajouterAgence} className="flex gap-2">
@@ -412,7 +395,6 @@ const Agences = () => {
           </div>
         </div>
 
-        {/* L'ARBORESCENCE AVEC BOUTONS D'ÉDITION */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6 overflow-y-auto" style={{maxHeight: 'calc(100vh - 12rem)'}}>
           <h2 className="text-lg font-bold text-slate-800 mb-6 border-b pb-2">Cartographie du Réseau</h2>
           
@@ -420,8 +402,6 @@ const Agences = () => {
             <div className="space-y-6">
               {agences.map(agence => (
                 <div key={agence.id} className="border border-emerald-100 rounded-lg overflow-hidden shadow-sm group">
-                  
-                  {/* Agence Ligne */}
                   <div className="bg-emerald-50 p-4 border-b border-emerald-100 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Building2 className="text-emerald-600" size={24} />
@@ -433,7 +413,6 @@ const Agences = () => {
                     </div>
                   </div>
 
-                  {/* Départements Ligne */}
                   <div className="p-4 space-y-4 bg-white">
                     {departements.filter(d => d.agence_id === agence.id).map(dept => (
                       <div key={dept.id} className="pl-4 ml-3 border-l-2 border-slate-200 group/dept">
@@ -448,7 +427,6 @@ const Agences = () => {
                           </div>
                         </div>
 
-                        {/* Postes Ligne */}
                         <div className="pl-6 space-y-2 mt-2">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             {postes.filter(p => p.departement_id === dept.id).map(poste => (
@@ -477,23 +455,24 @@ const Agences = () => {
     </div>
   );
 };
+
 // ==========================================
-// 3. LA PAGE DE GESTION DES ÉQUIPEMENTS
-// ==========================================
-// ==========================================
-// 3. LA PAGE DE GESTION DES ÉQUIPEMENTS (VERSION FINALE)
+// 5. LA PAGE DE GESTION DES ÉQUIPEMENTS (VERSION MASTER : FILTRES & PDF)
 // ==========================================
 const Equipements = () => {
   const [equipements, setEquipements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // État du formulaire d'ajout
-  const [nouveau, setNouveau] = useState({
-    reference: '', numero_serie: '', marque: '', modele: '', categorie: ''
-  });
+  // --- ÉTATS DES FILTRES ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatut, setFilterStatut] = useState("Tous");
+  const [filterCategorie, setFilterCategorie] = useState("Toutes");
 
-  // --- NOUVEAU : ÉTATS POUR LA FICHE DÉTAILLÉE (MODALE) ---
+  const formInitial = { reference: '', numero_serie: '', marque: '', modele: '', categorie: '' };
+  const [nouveau, setNouveau] = useState(formInitial);
+  const [enEdition, setEnEdition] = useState<number | null>(null);
+
   const [equipementSelectionne, setEquipementSelectionne] = useState<any>(null);
   const [historiqueMv, setHistoriqueMv] = useState<any[]>([]);
   const [historiqueInc, setHistoriqueInc] = useState<any[]>([]);
@@ -501,23 +480,29 @@ const Equipements = () => {
 
   const chargerEquipements = async () => {
     try {
-      const reponse = await fetch('http://localhost:8000/equipements/');
+      const reponse = await fetch('http://127.0.0.1:8123/equipements/');
       setEquipements(await reponse.json());
       setLoading(false);
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error(error); setLoading(false); }
   };
 
   useEffect(() => { chargerEquipements(); }, []);
 
-  const ajouterEquipement = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    const url = enEdition ? `http://127.0.0.1:8123/equipements/${enEdition}` : 'http://127.0.0.1:8123/equipements/';
+    const method = enEdition ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch('http://localhost:8000/equipements/', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouveau)
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nouveau)
       });
       if (res.ok) {
-        setNouveau({ reference: '', numero_serie: '', marque: '', modele: '', categorie: '' });
+        setNouveau(formInitial);
+        setEnEdition(null);
         chargerEquipements();
       } else {
         const err = await res.json(); alert("Erreur : " + err.detail);
@@ -526,15 +511,20 @@ const Equipements = () => {
     setIsSubmitting(false);
   };
 
-  // --- NOUVEAU : OUVRIR LA FICHE D'UN ÉQUIPEMENT ---
+  const editerEquipement = (eq: any) => {
+    setNouveau({ reference: eq.reference, numero_serie: eq.numero_serie, marque: eq.marque, modele: eq.modele, categorie: eq.categorie });
+    setEnEdition(eq.id);
+  };
+
+  const annulerEdition = () => { setNouveau(formInitial); setEnEdition(null); };
+
   const ouvrirFiche = async (eq: any) => {
     setEquipementSelectionne(eq);
     setLoadingDetails(true);
     try {
-      // On va chercher l'historique spécifique à CET équipement
       const [resMv, resInc] = await Promise.all([
-        fetch(`http://localhost:8000/equipements/${eq.id}/mouvements/`),
-        fetch(`http://localhost:8000/equipements/${eq.id}/incidents/`)
+        fetch(`http://127.0.0.1:8123/equipements/${eq.id}/mouvements/`),
+        fetch(`http://127.0.0.1:8123/equipements/${eq.id}/incidents/`)
       ]);
       if(resMv.ok) setHistoriqueMv(await resMv.json());
       if(resInc.ok) setHistoriqueInc(await resInc.json());
@@ -545,113 +535,212 @@ const Equipements = () => {
   const getStatutBadge = (statut: string) => {
     switch(statut) {
       case 'En stock': return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">En stock</span>;
+      case 'Affecté': return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">Affecté</span>;
       case 'En panne': return <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">En panne</span>;
       case 'Mis au rebut': return <span className="px-2 py-1 bg-slate-800 text-slate-200 rounded text-xs font-bold">Mis au rebut</span>;
       case 'En réparation externe': return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-bold">En réparation</span>;
-      default: return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">{statut}</span>;
+      default: return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-bold">{statut}</span>;
     }
+  };
+
+  // --- LOGIQUE DE FILTRAGE ---
+  const equipementsFiltres = equipements.filter(eq => {
+    const texteGlobal = (eq.reference + " " + eq.numero_serie + " " + eq.marque + " " + eq.modele + " " + eq.categorie).toLowerCase();
+    const matchSearch = texteGlobal.includes(searchTerm.toLowerCase());
+    const matchStatut = filterStatut === "Tous" ? true : eq.statut === filterStatut;
+    const matchCategorie = filterCategorie === "Toutes" ? true : eq.categorie === filterCategorie;
+    return matchSearch && matchStatut && matchCategorie;
+  });
+
+  // --- KPIs DYNAMIQUES ADAPTÉS AU FILTRE ---
+  const basePourCompteurs = filterCategorie === "Toutes" ? equipements : equipements.filter(e => e.categorie === filterCategorie);
+  
+  const totalType = basePourCompteurs.length;
+  const countStock = basePourCompteurs.filter(e => e.statut === 'En stock').length;
+  const countAffecte = basePourCompteurs.filter(e => e.statut === 'Affecté').length;
+  const countPanne = basePourCompteurs.filter(e => e.statut === 'En panne' || e.statut === 'En réparation externe').length;
+
+  // --- FONCTION EXPORT PDF SANS LIBRAIRIE ---
+  const imprimerInventairePDF = () => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @media print {
+        aside { display: none !important; }
+        main { padding: 0 !important; width: 100% !important; }
+        .no-print { display: none !important; }
+        .print-wide { width: 100% !important; grid-column: span 3 / span 3 !important; }
+        table { width: 100% !important; border: 1px solid #cbd5e1 !important; }
+        th, td { border-bottom: 1px solid #e2e8f0 !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    window.print();
+    document.head.removeChild(style);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Inventaire du Parc</h1>
-        <p className="text-slate-500 mt-1">Gérez l'ensemble des équipements et consultez leur dossier technique.</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Inventaire du Parc</h1>
+          <p className="text-slate-500 mt-1">Consultez, filtrez et éditez l'état de votre matériel en temps réel.</p>
+        </div>
+        <button 
+          onClick={imprimerInventairePDF}
+          className="no-print bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-md shadow-sm transition-colors flex items-center gap-2 text-sm"
+        >
+          <FileText size={18}/> Exporter l'inventaire (PDF)
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* COLONNE GAUCHE : LE FORMULAIRE D'AJOUT */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
-          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <MonitorSmartphone size={20} className="text-blue-600" /> Nouvel Équipement
+        {/* FORMULAIRE */}
+        <div className="no-print bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+          <h2 className={`text-lg font-bold mb-4 flex items-center gap-2 ${enEdition ? 'text-amber-600' : 'text-slate-800'}`}>
+            <MonitorSmartphone size={20} className={enEdition ? 'text-amber-500' : 'text-blue-600'} /> 
+            {enEdition ? "Corriger l'équipement" : "Nouvel Équipement"}
           </h2>
-          <form onSubmit={ajouterEquipement} className="space-y-4">
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
-              <input required type="text" list="categories-list" placeholder="Sélectionnez ou tapez..." className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.categorie} onChange={(e) => setNouveau({...nouveau, categorie: e.target.value})} />
+              <input required type="text" list="categories-list" placeholder="Sélectionnez ou tapez..." className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={nouveau.categorie} onChange={(e) => setNouveau({...nouveau, categorie: e.target.value})} />
               <datalist id="categories-list">
-                <option value="Unité Centrale" /> <option value="Écran" /> <option value="Imprimante" /> <option value="Téléphone IP" /> <option value="Switch / Routeur" />
+                <option value="Unité Centrale" /> <option value="Écran" /> <option value="Imprimante" /> <option value="Ordinateur Portable" />  <option value="Téléphone IP" /> <option value="Switch / Routeur" /> <option value="Câble Réseau" /> <option value="Onduleur" /> <option value="Souris" /> <option value="Clavier" /> <option value="Clé USB" /> <option value="Cable d'alimentation" /> <option value="Chargeur PC" /> <option value="Cable VGA" /> <option value="Cable HDMI" />
               </datalist>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Marque</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.marque} onChange={(e) => setNouveau({...nouveau, marque: e.target.value})} /></div>
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Modèle</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" value={nouveau.modele} onChange={(e) => setNouveau({...nouveau, modele: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Marque</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={nouveau.marque} onChange={(e) => setNouveau({...nouveau, marque: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Modèle</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={nouveau.modele} onChange={(e) => setNouveau({...nouveau, modele: e.target.value})} /></div>
             </div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Numéro de Série (S/N)</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm" value={nouveau.numero_serie} onChange={(e) => setNouveau({...nouveau, numero_serie: e.target.value})} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Référence Interne</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm" value={nouveau.reference} onChange={(e) => setNouveau({...nouveau, reference: e.target.value})} /></div>
-            <button disabled={isSubmitting} type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors mt-4">Enregistrer l'équipement</button>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Numéro de Série (S/N)</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={nouveau.numero_serie} onChange={(e) => setNouveau({...nouveau, numero_serie: e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Référence Interne</label><input required type="text" className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={nouveau.reference} onChange={(e) => setNouveau({...nouveau, reference: e.target.value})} /></div>
+            
+            <div className="flex gap-2 pt-4">
+              <button disabled={isSubmitting} type="submit" className={`flex-1 text-white font-medium py-2 px-4 rounded-md transition-colors ${enEdition ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {enEdition ? "Enregistrer les modifs" : "Ajouter au stock"}
+              </button>
+              {enEdition && (
+                <button type="button" onClick={annulerEdition} className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 px-4 rounded-md">Annuler</button>
+              )}
+            </div>
           </form>
         </div>
 
-        {/* COLONNE DROITE : LE TABLEAU D'INVENTAIRE */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-fit">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-            <h2 className="font-bold text-slate-800">Liste du matériel</h2>
-            <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2 py-1 rounded-full">{equipements.length} au total</span>
+        {/* BLOC INVENTAIRE */}
+        <div className="print-wide lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-fit flex flex-col">
+          
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="font-bold text-slate-800">
+                {filterCategorie === "Toutes" ? "Statistiques globales" : `Analyse : ${filterCategorie}s`}
+              </h2>
+              <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                {equipementsFiltres.length} affiché(s)
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="p-2 bg-white rounded border border-slate-200"><div className="text-[10px] uppercase font-bold text-slate-400">Total</div><div className="text-lg font-black text-slate-800">{totalType}</div></div>
+              <div className="p-2 bg-emerald-50 rounded border border-emerald-200"><div className="text-[10px] uppercase font-bold text-emerald-500">En Stock</div><div className="text-lg font-black text-emerald-700">{countStock}</div></div>
+              <div className="p-2 bg-blue-50 rounded border border-blue-200"><div className="text-[10px] uppercase font-bold text-blue-500">Affectés</div><div className="text-lg font-black text-blue-700">{countAffecte}</div></div>
+              <div className="p-2 bg-red-50 rounded border border-red-200"><div className="text-[10px] uppercase font-bold text-red-500">En Panne</div><div className="text-lg font-black text-red-700">{countPanne}</div></div>
+            </div>
           </div>
-          <div className="overflow-x-auto max-h-[600px]">
-            <table className="w-full text-left text-sm text-slate-600 relative">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200 sticky top-0">
-                <tr><th className="p-4">Réf & S/N</th><th className="p-4">Type</th><th className="p-4">Statut</th><th className="p-4 text-right">Dossier</th></tr>
+
+          <div className="no-print p-4 border-b border-slate-200 bg-white flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <input type="text" placeholder="Filtrer par S/N, Marque, Réf..." className="w-full pl-9 p-2 border border-slate-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            </div>
+            <select className="p-2 border border-slate-300 rounded-md text-sm bg-slate-50 text-slate-700 font-medium outline-none" value={filterStatut} onChange={e => setFilterStatut(e.target.value)}>
+              <option value="Tous">Tous les statuts</option>
+              <option value="En stock">📦 En stock</option>
+              <option value="Affecté">👤 Affectés</option>
+              <option value="En panne">⚠️ En panne</option>
+              <option value="En réparation externe">🔧 En réparation</option>
+              <option value="Mis au rebut">🗑️ Au rebut</option>
+            </select>
+            <select className="p-2 border border-slate-300 rounded-md text-sm bg-slate-50 text-slate-700 font-medium outline-none" value={filterCategorie} onChange={e => setFilterCategorie(e.target.value)}>
+              <option value="Toutes">Toutes les catégories</option>
+              <option value="Unité Centrale">Unités Centrales</option>
+              <option value="Écran">Écrans</option>
+              <option value="Imprimante">Imprimantes</option>
+              <option value="Ordinateur Portable">Ordis Portables</option>
+              <option value="Téléphone IP">Téléphones IP</option>
+              <option value="Câble Réseau">Câbles Réseau</option>
+              <option value="Switch / Routeur">Routeurs & Switches</option>
+              <option value="Onduleur">Onduleurs</option>
+              <option value="Souris" >Souris</option> 
+              <option value="Clavier" >Clavier</option>
+              <option value="Clé USB" >Clé USB</option>
+              <option value="Cable d'alimentation" >Cable d'alimentation</option>
+              <option value="Chargeur PC" >Chargeur PC</option>
+              <option value="Cable VGA" >Cable VGA</option>
+              <option value="Cable HDMI">Cable HDMI</option>
+            </select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="p-4">Réf & S/N</th>
+                  <th className="p-4">Désignation</th>
+                  <th className="p-4">Statut</th>
+                  <th className="no-print p-4 text-right">Actions</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chargement...</td></tr> : equipements.map((eq) => (
-                  <tr key={eq.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4"><div className="font-bold text-slate-800">{eq.reference}</div><div className="font-mono text-xs text-slate-400 mt-1">{eq.numero_serie}</div></td>
-                    <td className="p-4"><div className="font-medium text-slate-900">{eq.categorie}</div><div className="text-xs text-slate-500">{eq.marque} {eq.modele}</div></td>
-                    <td className="p-4">{getStatutBadge(eq.statut)}</td>
-                    <td className="p-4 text-right">
-                      {/* LE BOUTON MAGIQUE */}
-                      <button onClick={() => ouvrirFiche(eq)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors flex items-center gap-2 ml-auto text-xs font-bold">
-                        <FileText size={16}/> Fiche
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {/* --- LA CORRECTION EST ICI : ON UTILISE LA VARIABLE LOADING --- */}
+                {loading ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chargement en cours...</td></tr>
+                ) : equipementsFiltres.length === 0 ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Aucun élément trouvé.</td></tr>
+                ) : (
+                  equipementsFiltres.map((eq) => (
+                    <tr key={eq.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4"><div className="font-bold text-slate-800">{eq.reference}</div><div className="font-mono text-xs text-slate-400 mt-1">{eq.numero_serie}</div></td>
+                      <td className="p-4"><div className="font-medium text-slate-900">{eq.categorie}</div><div className="text-xs text-slate-500">{eq.marque} {eq.modele}</div></td>
+                      <td className="p-4">{getStatutBadge(eq.statut)}</td>
+                      <td className="no-print p-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => editerEquipement(eq)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md"><Pencil size={16} /></button>
+                          <button onClick={() => ouvrirFiche(eq)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md text-xs font-bold flex items-center gap-1"><FileText size={16}/> Fiche</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* ========================================== */}
-      {/* LA FENÊTRE MODALE (CARNET DE SANTÉ)        */}
-      {/* ========================================== */}
       {equipementSelectionne && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            {/* EN-TÊTE DE LA MODALE */}
             <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                  <MonitorSmartphone className="text-blue-600" />
-                  {equipementSelectionne.reference}
-                </h2>
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><MonitorSmartphone className="text-blue-600" /> {equipementSelectionne.reference}</h2>
                 <div className="flex gap-4 mt-2 text-sm text-slate-500">
                   <span><strong className="text-slate-700">S/N:</strong> {equipementSelectionne.numero_serie}</span>
-                  <span><strong className="text-slate-700">Marque:</strong> {equipementSelectionne.marque} {equipementSelectionne.modele}</span>
+                  <span><strong className="text-slate-700">Modèle:</strong> {equipementSelectionne.marque} {equipementSelectionne.modele}</span>
                   <span>{getStatutBadge(equipementSelectionne.statut)}</span>
                 </div>
               </div>
-              <button onClick={() => setEquipementSelectionne(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors">
-                <X size={24} />
-              </button>
+              <button onClick={() => setEquipementSelectionne(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full"><X size={24} /></button>
             </div>
-
-            {/* CORPS DE LA MODALE */}
             <div className="p-6 overflow-y-auto flex-1 bg-slate-100">
               {loadingDetails ? (
-                <div className="flex justify-center items-center h-40 text-slate-500"><Loader2 className="animate-spin mr-2"/> Chargement du dossier...</div>
+                <div className="flex justify-center items-center h-40 text-slate-500"><Loader2 className="animate-spin mr-2"/> Dossier en cours...</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* HISTORIQUE DES MOUVEMENTS */}
                   <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                     <h3 className="font-bold text-slate-800 p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2"><ArrowRightLeft size={16}/> Affectations & Trajets</h3>
                     <div className="p-4 space-y-4">
-                      {historiqueMv.length === 0 ? <p className="text-sm text-slate-500">Aucun mouvement.</p> : 
+                      {historiqueMv.length === 0 ? <p className="text-sm text-slate-500">Aucun trajet.</p> : 
                         historiqueMv.map(mv => (
                           <div key={mv.id} className="border-l-2 border-blue-200 pl-3 py-1 relative">
                             <div className="absolute w-2 h-2 bg-blue-500 rounded-full -left-[5px] top-2"></div>
@@ -663,12 +752,10 @@ const Equipements = () => {
                       }
                     </div>
                   </div>
-
-                  {/* HISTORIQUE DES PANNES */}
                   <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                     <h3 className="font-bold text-slate-800 p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2"><Wrench size={16}/> Journal des Pannes</h3>
                     <div className="p-4 space-y-4">
-                      {historiqueInc.length === 0 ? <p className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded border border-emerald-100">Matériel fiable. Aucune panne enregistrée !</p> : 
+                      {historiqueInc.length === 0 ? <p className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded border border-emerald-100">Aucune panne enregistrée !</p> : 
                         historiqueInc.map(inc => (
                           <div key={inc.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                             <div className="flex justify-between items-start mb-2">
@@ -682,20 +769,18 @@ const Equipements = () => {
                       }
                     </div>
                   </div>
-
                 </div>
               )}
             </div>
-            
           </div>
         </div>
       )}
-
     </div>
   );
 };
+
 // ==========================================
-// 5. LA PAGE GESTION DES EMPLOYÉS (RH)
+// 6. LA PAGE GESTION DES EMPLOYÉS 
 // ==========================================
 const Employes = () => {
   const [employes, setEmployes] = useState<any[]>([]);
@@ -704,7 +789,6 @@ const Employes = () => {
   const [agences, setAgences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // État du formulaire
   const initialForm = { nom: '', prenom: '', matricule: '', telephone: '', email: '', statut: 'Actif', poste_id: '' };
   const [form, setForm] = useState(initialForm);
   const [enEdition, setEnEdition] = useState<number | null>(null);
@@ -712,10 +796,10 @@ const Employes = () => {
   const chargerDonnees = async () => {
     try {
       const [resEmp, resPostes, resDepts, resAgences] = await Promise.all([
-        fetch('http://localhost:8000/employes/'),
-        fetch('http://localhost:8000/postes/'),
-        fetch('http://localhost:8000/departements/'),
-        fetch('http://localhost:8000/agences/')
+        fetch('http://127.0.0.1:8123/employes/'),
+        fetch('http://127.0.0.1:8123/postes/'),
+        fetch('http://127.0.0.1:8123/departements/'),
+        fetch('http://127.0.0.1:8123/agences/')
       ]);
       setEmployes(await resEmp.json());
       setPostes(await resPostes.json());
@@ -729,7 +813,6 @@ const Employes = () => {
 
   useEffect(() => { chargerDonnees(); }, []);
 
-  // Obtenir le chemin complet du poste
   const getPosteLabel = (poste_id: number | null) => {
     if (!poste_id) return <span className="text-slate-400 italic">Aucun poste (Vacant)</span>;
     const p = postes.find(x => x.id === poste_id);
@@ -746,7 +829,7 @@ const Employes = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = enEdition ? `http://localhost:8000/employes/${enEdition}` : 'http://localhost:8000/employes/';
+    const url = enEdition ? `http://127.0.0.1:8123/employes/${enEdition}` : 'http://127.0.0.1:8123/employes/';
     const method = enEdition ? 'PUT' : 'POST';
     const payload = { ...form, poste_id: form.poste_id ? parseInt(form.poste_id) : null };
 
@@ -903,7 +986,7 @@ const Employes = () => {
 };
 
 // ==========================================
-// 6. LA PAGE DES MOUVEMENTS ET AFFECTATIONS
+// 7. LA PAGE DES MOUVEMENTS ET AFFECTATIONS
 // ==========================================
 const Mouvements = () => {
   const [equipements, setEquipements] = useState<any[]>([]);
@@ -918,9 +1001,9 @@ const Mouvements = () => {
   const chargerDonnees = async () => {
     try {
       const [resEq, resMv, resEmp] = await Promise.all([
-        fetch('http://localhost:8000/equipements/'),
-        fetch('http://localhost:8000/mouvements/'),
-        fetch('http://localhost:8000/employes/')
+        fetch('http://127.0.0.1:8123/equipements/'),
+        fetch('http://127.0.0.1:8123/mouvements/'),
+        fetch('http://127.0.0.1:8123/employes/')
       ]);
       setEquipements(await resEq.json());
       setMouvements(await resMv.json());
@@ -931,7 +1014,6 @@ const Mouvements = () => {
 
   useEffect(() => { chargerDonnees(); }, []);
 
-  // Magie UX : Pré-remplir automatiquement l'origine
   useEffect(() => {
     if (form.equipement_id) {
       const eqId = parseInt(form.equipement_id);
@@ -949,7 +1031,7 @@ const Mouvements = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const res = await fetch('http://localhost:8000/mouvements/', {
+    const res = await fetch('http://127.0.0.1:8123/mouvements/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -959,7 +1041,7 @@ const Mouvements = () => {
     });
     if (res.ok) {
       setForm(initialForm);
-      chargerDonnees(); // Recharge tout pour mettre à jour les statuts
+      chargerDonnees(); 
     } else {
       const err = await res.json();
       alert("Erreur : " + err.detail);
@@ -981,8 +1063,6 @@ const Mouvements = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* FORMULAIRE DE MOUVEMENT */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <ArrowRightLeft size={20} className="text-blue-600" />
@@ -1045,7 +1125,6 @@ const Mouvements = () => {
           </form>
         </div>
 
-        {/* HISTORIQUE GLOBAL (TABLEAU) */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-fit">
           <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
             <h2 className="font-bold text-slate-800 flex items-center gap-2"><History size={18} className="text-slate-500"/> Journal des Mouvements</h2>
@@ -1105,7 +1184,7 @@ const Mouvements = () => {
 };
 
 // ==========================================
-// 7. LA PAGE DE GESTION DES INCIDENTS (PANNES)
+// 8. LA PAGE DE GESTION DES INCIDENTS 
 // ==========================================
 const Incidents = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
@@ -1119,16 +1198,13 @@ const Incidents = () => {
   const chargerDonnees = async () => {
     try {
       const [resInc, resEq] = await Promise.all([
-        fetch('http://localhost:8000/incidents/'),
-        fetch('http://localhost:8000/equipements/') // On charge les équipements pour les afficher
+        fetch('http://127.0.0.1:8123/incidents/'),
+        fetch('http://127.0.0.1:8123/equipements/') 
       ]);
       
-      // On va s'assurer que l'API des incidents existe bien. 
-      // Si la route globale n'existe pas encore, on va la récupérer équipement par équipement (ou on la créera)
       if(resInc.ok) {
         setIncidents(await resInc.json());
       } else {
-        // Fallback si la route globale n'est pas définie dans main.py
         setIncidents([]); 
       }
       
@@ -1139,11 +1215,10 @@ const Incidents = () => {
 
   useEffect(() => { chargerDonnees(); }, []);
 
-  // Déclarer une nouvelle panne
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const res = await fetch('http://localhost:8000/incidents/', {
+    const res = await fetch('http://127.0.0.1:8123/incidents/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1153,9 +1228,16 @@ const Incidents = () => {
     });
 
     if (res.ok) {
-      setForm(initialForm);
       chargerDonnees();
-      alert("Incident déclaré ! L'équipement est maintenant marqué 'En panne'.");
+      
+      // NOUVELLE LOGIQUE : Message d'alerte dynamique
+      if (form.niveau_criticite === 'Critique') {
+        alert("🚨 Incident Critique déclaré ! L'équipement a été retiré et marqué 'En panne'.");
+      } else {
+        alert("✅ Incident enregistré. La gêne est mineure, l'équipement conserve son statut et reste utilisable.");
+      }
+      
+      setForm(initialForm);
     } else {
       const err = await res.json();
       alert("Erreur : " + err.detail);
@@ -1163,11 +1245,10 @@ const Incidents = () => {
     setIsSubmitting(false);
   };
 
-  // Clôturer une panne (Réparation terminée)
   const resoudreIncident = async (incident_id: number) => {
     if (!window.confirm("Confirmez-vous que cet équipement est réparé et remis en stock ?")) return;
 
-    const res = await fetch(`http://localhost:8000/incidents/${incident_id}/resoudre`, {
+    const res = await fetch(`http://127.0.0.1:8123/incidents/${incident_id}/resoudre`, {
       method: 'PUT'
     });
 
@@ -1194,7 +1275,6 @@ const Incidents = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* FORMULAIRE DE DÉCLARATION */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
           <h2 className="text-lg font-bold text-red-700 mb-6 flex items-center gap-2">
             <AlertTriangle size={20} />
@@ -1232,10 +1312,8 @@ const Incidents = () => {
           </form>
         </div>
 
-        {/* LISTE DES INCIDENTS */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Incidents en cours */}
           <div className="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-red-100 bg-red-50 flex justify-between items-center">
               <h2 className="font-bold text-red-900 flex items-center gap-2"><Wrench size={18}/> En cours de traitement</h2>
@@ -1269,7 +1347,6 @@ const Incidents = () => {
             </div>
           </div>
 
-          {/* Historique Résolus */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50">
               <h2 className="font-bold text-slate-700 flex items-center gap-2"><History size={18}/> Historique des réparations</h2>
@@ -1302,7 +1379,7 @@ const Incidents = () => {
 };
 
 // ==========================================
-// 4. LE ROUTEUR PRINCIPAL
+// 9. LE ROUTEUR PRINCIPAL
 // ==========================================
 export default function App() {
   return (
