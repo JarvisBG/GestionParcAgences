@@ -1,0 +1,18 @@
+# Classement des langages (GitHub Linguist)
+#
+# Ce depot est un backend Python — FastAPI + SQLAlchemy — expose en API REST,
+# consomme par une interface React livree dans le meme depot.
+#
+# Linguist classe au volume d'octets. Sans ces regles, les ~100 Ko de TSX du
+# frontend masquent les ~23 Ko de Python qui portent l'API, et le depot
+# s'affiche en TypeScript. Le frontend est donc declare comme sous-projet :
+# son code reste present et lisible, il ne compte simplement pas dans la
+# statistique de langage du depot.
+
+frontend/** linguist-vendored
+
+# Composants shadcn/ui : code tiers copie dans le depot, jamais ecrit ici.
+frontend/@/components/ui/** linguist-vendored
+
+# Fichiers generes par l'outillage.
+frontend/package-lock.json linguist-generated
