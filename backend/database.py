@@ -2,15 +2,23 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 
-# Création du fichier SQLite local qui stockera tout
-# Sur Vercel seul /tmp est accessible en écriture
-SQLALCHEMY_DATABASE_URL = "sqlite:////tmp/parc_informatique.db" if os.environ.get("VERCEL") else "sqlite:///./parc_informatique.db"
+# En ligne : base PostgreSQL partagée (Neon, fournie par Vercel via DATABASE_URL)
+# En local / .exe : fichier SQLite
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+if DATABASE_URL:
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1).replace("postgresql://", "postgresql+psycopg://", 1)
+    # Fonctions serverless : une connexion par requête, pas de pool à garder ouvert
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, poolclass=NullPool)
+else:
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./parc_informatique.db"
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

@@ -6,3 +6,6 @@ backend/output
 output
 frontend/dist
 run_app.py
+.agents
+.claude
+skills-lock.json

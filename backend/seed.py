@@ -1,5 +1,6 @@
 """Données de démonstration fictives, chargées au démarrage si la base est vide (variable SEED_DEMO=1)."""
 from datetime import datetime, timedelta
+from sqlalchemy.exc import IntegrityError
 from backend import models
 from backend.database import SessionLocal
 
@@ -138,5 +139,8 @@ def seed_demo():
         ])
 
         db.commit()
+    except IntegrityError:
+        # Une autre instance a chargé les données au même moment
+        db.rollback()
     finally:
         db.close()
