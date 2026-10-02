@@ -35,6 +35,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 
+// En dev (Vite sur :5173) on vise le backend local ; en production le backend sert le frontend (même origine)
+const API = import.meta.env.DEV ? 'http://127.0.0.1:8123' : '';
+
 // ==========================================
 // 1. LE COMPOSANT DE MISE EN PAGE (SIDEBAR)
 // ==========================================
@@ -97,11 +100,11 @@ const Dashboard = () => {
     const fetchDonnees = async () => {
       try {
         const [reqEq, reqAg, reqPo, reqEmp, reqMv] = await Promise.all([
-          fetch('http://127.0.0.1:8123/equipements/'),
-          fetch('http://127.0.0.1:8123/agences/'),
-          fetch('http://127.0.0.1:8123/postes/'),
-          fetch('http://127.0.0.1:8123/employes/'),
-          fetch('http://127.0.0.1:8123/mouvements/')
+          fetch(`${API}/equipements/`),
+          fetch(`${API}/agences/`),
+          fetch(`${API}/postes/`),
+          fetch(`${API}/employes/`),
+          fetch(`${API}/mouvements/`)
         ]);
 
         const eqData = await reqEq.json();
@@ -289,9 +292,9 @@ const Agences = () => {
   const chargerStructure = async () => {
     try {
       const [resAgences, resDepts, resPostes] = await Promise.all([
-        fetch('http://127.0.0.1:8123/agences/'),
-        fetch('http://127.0.0.1:8123/departements/'),
-        fetch('http://127.0.0.1:8123/postes/')
+        fetch(`${API}/agences/`),
+        fetch(`${API}/departements/`),
+        fetch(`${API}/postes/`)
       ]);
       setAgences(await resAgences.json());
       setDepartements(await resDepts.json());
@@ -306,17 +309,17 @@ const Agences = () => {
 
   const ajouterAgence = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://127.0.0.1:8123/agences/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouvelleAgence) });
+    await fetch(`${API}/agences/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nouvelleAgence) });
     setNouvelleAgence({ nom: '' }); chargerStructure();
   };
   const ajouterDepartement = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://127.0.0.1:8123/departements/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom: nouveauDept.nom, agence_id: parseInt(nouveauDept.agence_id) }) });
+    await fetch(`${API}/departements/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom: nouveauDept.nom, agence_id: parseInt(nouveauDept.agence_id) }) });
     setNouveauDept({ nom: '', agence_id: '' }); chargerStructure();
   };
   const ajouterPoste = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('http://127.0.0.1:8123/postes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titre: nouveauPoste.titre, departement_id: parseInt(nouveauPoste.departement_id) }) });
+    await fetch(`${API}/postes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titre: nouveauPoste.titre, departement_id: parseInt(nouveauPoste.departement_id) }) });
     setNouveauPoste({ titre: '', departement_id: '' }); chargerStructure();
   };
 
@@ -329,7 +332,7 @@ const Agences = () => {
     if (type === 'departements') bodyData = { nom: nouveauNom, agence_id: dataSupplementaire.agence_id };
     if (type === 'postes') bodyData = { titre: nouveauNom, departement_id: dataSupplementaire.departement_id };
 
-    await fetch(`http://127.0.0.1:8123/${type}/${id}`, {
+    await fetch(`${API}/${type}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bodyData)
@@ -340,7 +343,7 @@ const Agences = () => {
   const supprimerItem = async (type: string, id: number) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet élément ?")) return;
     
-    const res = await fetch(`http://127.0.0.1:8123/${type}/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API}/${type}/${id}`, { method: 'DELETE' });
     if (res.ok) {
       chargerStructure();
     } else {
@@ -480,7 +483,7 @@ const Equipements = () => {
 
   const chargerEquipements = async () => {
     try {
-      const reponse = await fetch('http://127.0.0.1:8123/equipements/');
+      const reponse = await fetch(`${API}/equipements/`);
       setEquipements(await reponse.json());
       setLoading(false);
     } catch (error) { console.error(error); setLoading(false); }
@@ -491,7 +494,7 @@ const Equipements = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const url = enEdition ? `http://127.0.0.1:8123/equipements/${enEdition}` : 'http://127.0.0.1:8123/equipements/';
+    const url = enEdition ? `${API}/equipements/${enEdition}` : `${API}/equipements/`;
     const method = enEdition ? 'PUT' : 'POST';
 
     try {
@@ -523,8 +526,8 @@ const Equipements = () => {
     setLoadingDetails(true);
     try {
       const [resMv, resInc] = await Promise.all([
-        fetch(`http://127.0.0.1:8123/equipements/${eq.id}/mouvements/`),
-        fetch(`http://127.0.0.1:8123/equipements/${eq.id}/incidents/`)
+        fetch(`${API}/equipements/${eq.id}/mouvements/`),
+        fetch(`${API}/equipements/${eq.id}/incidents/`)
       ]);
       if(resMv.ok) setHistoriqueMv(await resMv.json());
       if(resInc.ok) setHistoriqueInc(await resInc.json());
@@ -796,10 +799,10 @@ const Employes = () => {
   const chargerDonnees = async () => {
     try {
       const [resEmp, resPostes, resDepts, resAgences] = await Promise.all([
-        fetch('http://127.0.0.1:8123/employes/'),
-        fetch('http://127.0.0.1:8123/postes/'),
-        fetch('http://127.0.0.1:8123/departements/'),
-        fetch('http://127.0.0.1:8123/agences/')
+        fetch(`${API}/employes/`),
+        fetch(`${API}/postes/`),
+        fetch(`${API}/departements/`),
+        fetch(`${API}/agences/`)
       ]);
       setEmployes(await resEmp.json());
       setPostes(await resPostes.json());
@@ -829,7 +832,7 @@ const Employes = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = enEdition ? `http://127.0.0.1:8123/employes/${enEdition}` : 'http://127.0.0.1:8123/employes/';
+    const url = enEdition ? `${API}/employes/${enEdition}` : `${API}/employes/`;
     const method = enEdition ? 'PUT' : 'POST';
     const payload = { ...form, poste_id: form.poste_id ? parseInt(form.poste_id) : null };
 
@@ -1001,9 +1004,9 @@ const Mouvements = () => {
   const chargerDonnees = async () => {
     try {
       const [resEq, resMv, resEmp] = await Promise.all([
-        fetch('http://127.0.0.1:8123/equipements/'),
-        fetch('http://127.0.0.1:8123/mouvements/'),
-        fetch('http://127.0.0.1:8123/employes/')
+        fetch(`${API}/equipements/`),
+        fetch(`${API}/mouvements/`),
+        fetch(`${API}/employes/`)
       ]);
       setEquipements(await resEq.json());
       setMouvements(await resMv.json());
@@ -1031,7 +1034,7 @@ const Mouvements = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const res = await fetch('http://127.0.0.1:8123/mouvements/', {
+    const res = await fetch(`${API}/mouvements/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1198,8 +1201,8 @@ const Incidents = () => {
   const chargerDonnees = async () => {
     try {
       const [resInc, resEq] = await Promise.all([
-        fetch('http://127.0.0.1:8123/incidents/'),
-        fetch('http://127.0.0.1:8123/equipements/') 
+        fetch(`${API}/incidents/`),
+        fetch(`${API}/equipements/`) 
       ]);
       
       if(resInc.ok) {
@@ -1218,7 +1221,7 @@ const Incidents = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const res = await fetch('http://127.0.0.1:8123/incidents/', {
+    const res = await fetch(`${API}/incidents/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1248,7 +1251,7 @@ const Incidents = () => {
   const resoudreIncident = async (incident_id: number) => {
     if (!window.confirm("Confirmez-vous que cet équipement est réparé et remis en stock ?")) return;
 
-    const res = await fetch(`http://127.0.0.1:8123/incidents/${incident_id}/resoudre`, {
+    const res = await fetch(`${API}/incidents/${incident_id}/resoudre`, {
       method: 'PUT'
     });
 

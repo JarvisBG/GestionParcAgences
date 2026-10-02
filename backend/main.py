@@ -12,6 +12,11 @@ import sys
 # Création des tables
 models.Base.metadata.create_all(bind=engine)
 
+# Données fictives pour la version de démonstration en ligne (base vide à chaque redémarrage)
+if os.environ.get("SEED_DEMO") == "1" or os.environ.get("VERCEL"):
+    from backend.seed import seed_demo
+    seed_demo()
+
 app = FastAPI(title="Gestion Parc Multi-Agences API")
 
 # ==========================================
