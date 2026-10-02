@@ -31,7 +31,8 @@ import {
   Smartphone,
   Usb, 
   Cable, 
-  BatteryCharging
+  BatteryCharging,
+  Menu
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 
@@ -43,43 +44,56 @@ const API = import.meta.env.DEV ? 'http://127.0.0.1:8123' : '';
 // ==========================================
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const [menuOuvert, setMenuOuvert] = useState(false);
   const isActive = (path: string) => location.pathname === path ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white";
+
+  // Sur mobile, le menu se referme dès qu'on change de page
+  useEffect(() => { setMenuOuvert(false); }, [location.pathname]);
+
+  const liens = [
+    { to: "/", icon: LayoutDashboard, label: "Tableau de bord" },
+    { to: "/agences", icon: Building2, label: "Agences & Postes" },
+    { to: "/equipements", icon: MonitorSmartphone, label: "Équipements" },
+    { to: "/employes", icon: Users, label: "Employés" },
+    { to: "/mouvements", icon: ArrowRightLeft, label: "Mouvements & Traçabilité" },
+    { to: "/incidents", icon: AlertTriangle, label: "Incidents & Pannes" },
+  ];
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
-      <aside className="w-64 bg-slate-950 text-white flex flex-col shadow-xl">
+      {/* Fond sombre derrière le menu ouvert (mobile) */}
+      {menuOuvert && <div className="no-print fixed inset-0 bg-slate-900/60 z-40 lg:hidden" onClick={() => setMenuOuvert(false)} />}
+
+      <aside className={`no-print fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 text-white flex flex-col shadow-xl transform transition-transform duration-200 lg:static lg:translate-x-0 ${menuOuvert ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 text-2xl font-bold border-b border-slate-800 flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg">
             <MonitorSmartphone size={24} className="text-white" />
           </div>
-          <span>ParcManager</span>
+          <span className="flex-1">ParcManager</span>
+          <button onClick={() => setMenuOuvert(false)} className="lg:hidden p-1 text-slate-400 hover:text-white" aria-label="Fermer le menu"><X size={22} /></button>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2 mt-4">
-          <Link to="/" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/')}`}>
-            <LayoutDashboard size={20} /> Tableau de bord
-          </Link>
-          <Link to="/agences" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/agences')}`}>
-            <Building2 size={20} /> Agences & Postes
-          </Link>
-          <Link to="/equipements" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/equipements')}`}>
-            <MonitorSmartphone size={20} /> Équipements
-          </Link>
-          <Link to="/employes" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/employes')}`}>
-            <Users size={20} /> Employés
-          </Link>
-          <Link to="/mouvements" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/mouvements')}`}>
-            <ArrowRightLeft size={20} /> Mouvements & Traçabilité
-          </Link>
-          <Link to="/incidents" className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive('/incidents')}`}>
-            <AlertTriangle size={20} /> Incidents & Pannes
-          </Link>
+        <nav className="flex-1 p-4 space-y-2 mt-4 overflow-y-auto">
+          {liens.map(({ to, icon: Icon, label }) => (
+            <Link key={to} to={to} className={`flex items-center gap-3 p-3 rounded-lg transition-all ${isActive(to)}`}>
+              <Icon size={20} /> {label}
+            </Link>
+          ))}
         </nav>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Barre supérieure (mobile et tablette uniquement) */}
+        <header className="no-print lg:hidden flex items-center gap-3 bg-slate-950 text-white px-4 py-3 shadow-md">
+          <button onClick={() => setMenuOuvert(true)} className="p-1.5 rounded-md hover:bg-slate-800" aria-label="Ouvrir le menu"><Menu size={24} /></button>
+          <div className="bg-blue-600 p-1.5 rounded-md"><MonitorSmartphone size={18} className="text-white" /></div>
+          <span className="font-bold text-lg">ParcManager</span>
+        </header>
+
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 };
@@ -171,41 +185,41 @@ const Dashboard = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Tableau de bord</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Tableau de bord</h1>
         <p className="text-slate-500 mt-1">Données en temps réel de votre parc informatique.</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Équipements</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider">Total Équipements</CardTitle>
             <div className="bg-blue-100 p-2 rounded-full"><MonitorSmartphone className="h-6 w-6 text-blue-600" /></div>
           </CardHeader>
-          <CardContent><div className="text-4xl font-black text-slate-900">{stats.equipements}</div></CardContent>
+          <CardContent><div className="text-3xl md:text-4xl font-black text-slate-900">{stats.equipements}</div></CardContent>
         </Card>
 
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Agences</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider">Agences</CardTitle>
             <div className="bg-emerald-100 p-2 rounded-full"><Building2 className="h-6 w-6 text-emerald-600" /></div>
           </CardHeader>
-          <CardContent><div className="text-4xl font-black text-slate-900">{stats.agences}</div></CardContent>
+          <CardContent><div className="text-3xl md:text-4xl font-black text-slate-900">{stats.agences}</div></CardContent>
         </Card>
 
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Postes de travail</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider">Postes de travail</CardTitle>
             <div className="bg-amber-100 p-2 rounded-full"><Briefcase className="h-6 w-6 text-amber-600" /></div>
           </CardHeader>
-          <CardContent><div className="text-4xl font-black text-slate-900">{stats.postes}</div></CardContent>
+          <CardContent><div className="text-3xl md:text-4xl font-black text-slate-900">{stats.postes}</div></CardContent>
         </Card>
 
         <Card className="shadow-sm border-red-200 bg-red-50">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-red-700 uppercase tracking-wider">Pannes en cours</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-bold text-red-700 uppercase tracking-wider">Pannes en cours</CardTitle>
             <div className="bg-red-200 p-2 rounded-full"><AlertTriangle className="h-6 w-6 text-red-700" /></div>
           </CardHeader>
-          <CardContent><div className="text-4xl font-black text-red-700">{stats.incidents}</div></CardContent>
+          <CardContent><div className="text-3xl md:text-4xl font-black text-red-700">{stats.incidents}</div></CardContent>
         </Card>
       </div>
 
@@ -355,7 +369,7 @@ const Agences = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Agences & Structure</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Agences & Structure</h1>
         <p className="text-slate-500 mt-1">Gérez la hiérarchie de vos sites, départements et postes de travail.</p>
       </div>
 
@@ -583,9 +597,9 @@ const Equipements = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Inventaire du Parc</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Inventaire du Parc</h1>
           <p className="text-slate-500 mt-1">Consultez, filtrez et éditez l'état de votre matériel en temps réel.</p>
         </div>
         <button 
@@ -598,7 +612,7 @@ const Equipements = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* FORMULAIRE */}
-        <div className="no-print bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+        <div className="no-print bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-6">
           <h2 className={`text-lg font-bold mb-4 flex items-center gap-2 ${enEdition ? 'text-amber-600' : 'text-slate-800'}`}>
             <MonitorSmartphone size={20} className={enEdition ? 'text-amber-500' : 'text-blue-600'} /> 
             {enEdition ? "Corriger l'équipement" : "Nouvel Équipement"}
@@ -643,7 +657,7 @@ const Equipements = () => {
               </span>
             </div>
             
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div className="p-2 bg-white rounded border border-slate-200"><div className="text-[10px] uppercase font-bold text-slate-400">Total</div><div className="text-lg font-black text-slate-800">{totalType}</div></div>
               <div className="p-2 bg-emerald-50 rounded border border-emerald-200"><div className="text-[10px] uppercase font-bold text-emerald-500">En Stock</div><div className="text-lg font-black text-emerald-700">{countStock}</div></div>
               <div className="p-2 bg-blue-50 rounded border border-blue-200"><div className="text-[10px] uppercase font-bold text-blue-500">Affectés</div><div className="text-lg font-black text-blue-700">{countAffecte}</div></div>
@@ -685,7 +699,7 @@ const Equipements = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
+            <table className="w-full min-w-[720px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
                 <tr>
                   <th className="p-4">Réf & S/N</th>
@@ -724,10 +738,10 @@ const Equipements = () => {
       {equipementSelectionne && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
-              <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3"><MonitorSmartphone className="text-blue-600" /> {equipementSelectionne.reference}</h2>
-                <div className="flex gap-4 mt-2 text-sm text-slate-500">
+            <div className="p-4 md:p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3 break-all"><MonitorSmartphone className="text-blue-600" /> {equipementSelectionne.reference}</h2>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-slate-500">
                   <span><strong className="text-slate-700">S/N:</strong> {equipementSelectionne.numero_serie}</span>
                   <span><strong className="text-slate-700">Modèle:</strong> {equipementSelectionne.marque} {equipementSelectionne.modele}</span>
                   <span>{getStatutBadge(equipementSelectionne.statut)}</span>
@@ -735,7 +749,7 @@ const Equipements = () => {
               </div>
               <button onClick={() => setEquipementSelectionne(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full"><X size={24} /></button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-100">
+            <div className="p-4 md:p-6 overflow-y-auto flex-1 bg-slate-100">
               {loadingDetails ? (
                 <div className="flex justify-center items-center h-40 text-slate-500"><Loader2 className="animate-spin mr-2"/> Dossier en cours...</div>
               ) : (
@@ -879,7 +893,7 @@ const Employes = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Ressources Humaines</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Ressources Humaines</h1>
         <p className="text-slate-500 mt-1">Gérez le personnel, les affectations aux postes et les départs.</p>
       </div>
 
@@ -961,7 +975,7 @@ const Employes = () => {
             <span className="text-xs font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">{employes.length} employé(s)</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
+            <table className="w-full min-w-[720px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
                 <tr>
                   <th className="p-4">Identité & Contact</th>
@@ -1061,12 +1075,12 @@ const Mouvements = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Affectations & Mouvements</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Affectations & Mouvements</h1>
         <p className="text-slate-500 mt-1">Transférez le matériel, affectez-le aux employés ou renvoyez-le en stock.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-6">
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <ArrowRightLeft size={20} className="text-blue-600" />
             Nouveau Mouvement
@@ -1135,7 +1149,7 @@ const Mouvements = () => {
           </div>
           
           <div className="overflow-x-auto max-h-[600px]">
-            <table className="w-full text-left text-sm text-slate-600 relative">
+            <table className="w-full min-w-[720px] text-left text-sm text-slate-600 relative">
               <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-semibold sticky top-0 border-b border-slate-200 shadow-sm">
                 <tr>
                   <th className="p-4">Date</th>
@@ -1272,13 +1286,13 @@ const Incidents = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Incidents & Pannes</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Incidents & Pannes</h1>
         <p className="text-slate-500 mt-1">Déclarez le matériel défectueux et suivez l'avancement des réparations.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-6">
           <h2 className="text-lg font-bold text-red-700 mb-6 flex items-center gap-2">
             <AlertTriangle size={20} />
             Déclarer une panne
@@ -1331,7 +1345,7 @@ const Incidents = () => {
                incidents.filter(i => i.statut === 'En cours').map(inc => {
                  const eq = equipements.find(e => e.id === inc.equipement_id);
                  return (
-                   <div key={inc.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50">
+                   <div key={inc.id} className="border border-slate-200 p-4 rounded-lg flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50">
                      <div>
                        <div className="flex items-center gap-2 mb-1">
                          <span className="font-bold text-slate-800">{eq?.reference || "Machine inconnue"}</span>
@@ -1358,7 +1372,7 @@ const Incidents = () => {
               {incidents.filter(i => i.statut === 'Résolu').map(inc => {
                  const eq = equipements.find(e => e.id === inc.equipement_id);
                  return (
-                   <div key={inc.id} className="border border-slate-200 p-3 rounded-lg flex justify-between items-center bg-white">
+                   <div key={inc.id} className="border border-slate-200 p-3 rounded-lg flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-white">
                      <div>
                        <div className="font-bold text-slate-600 text-sm">{eq?.reference} - <span className="font-normal">{inc.description}</span></div>
                        <p className="text-xs text-slate-400 mt-1">
