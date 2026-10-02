@@ -102,7 +102,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 // 2. LA PAGE TABLEAU DE BORD 
 // ==========================================
 const Dashboard = () => {
-  const [stats, setStats] = useState({ equipements: 0, agences: 0, postes: 0, incidents: 0 });
+  const [stats, setStats] = useState({ equipements: 0, enService: 0, auRebut: 0, agences: 0, postes: 0, incidents: 0 });
   
   const [employes, setEmployes] = useState<any[]>([]);
   const [equipements, setEquipements] = useState<any[]>([]);
@@ -132,10 +132,13 @@ const Dashboard = () => {
         setMouvements(mvData);
 
         const compteIncidents = eqData.filter((eq: any) => eq.statut === "En panne").length;
-        const equipementsActifs = eqData.filter((eq: any) => eq.statut !== "Mis au rebut");
+        const compteRebut = eqData.filter((eq: any) => eq.statut === "Mis au rebut").length;
 
+        // Même total que la page Inventaire, avec le détail en service / au rebut
         setStats({
-          equipements: equipementsActifs.length,
+          equipements: eqData.length,
+          enService: eqData.length - compteRebut,
+          auRebut: compteRebut,
           agences: agData.length,
           postes: poData.length,
           incidents: compteIncidents
@@ -195,7 +198,10 @@ const Dashboard = () => {
             <CardTitle className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider">Total Équipements</CardTitle>
             <div className="bg-blue-100 p-2 rounded-full"><MonitorSmartphone className="h-6 w-6 text-blue-600" /></div>
           </CardHeader>
-          <CardContent><div className="text-3xl md:text-4xl font-black text-slate-900">{stats.equipements}</div></CardContent>
+          <CardContent>
+            <div className="text-3xl md:text-4xl font-black text-slate-900">{stats.equipements}</div>
+            <p className="text-xs text-slate-500 mt-1">{stats.enService} en service · {stats.auRebut} au rebut</p>
+          </CardContent>
         </Card>
 
         <Card className="shadow-sm border-slate-200">

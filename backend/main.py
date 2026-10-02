@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime
 from backend import models, schemas
@@ -53,7 +54,7 @@ def create_agence(agence: schemas.AgenceCreate, db: Session = Depends(get_db)):
     return nouvelle_agence
 
 @app.get("/agences/", response_model=list[schemas.Agence])
-def get_agences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_agences(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(models.Agence).offset(skip).limit(limit).all()
 
 # ==========================================
@@ -71,7 +72,7 @@ def create_departement(departement: schemas.DepartementCreate, db: Session = Dep
     return nouveau_dept
 
 @app.get("/departements/", response_model=list[schemas.Departement])
-def get_departements(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_departements(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(models.Departement).offset(skip).limit(limit).all()
 
 # ==========================================
@@ -89,7 +90,7 @@ def create_poste(poste: schemas.PosteCreate, db: Session = Depends(get_db)):
     return nouveau_poste
 
 @app.get("/postes/", response_model=list[schemas.Poste])
-def get_postes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_postes(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(models.Poste).offset(skip).limit(limit).all()
 
 # ==========================================
@@ -107,18 +108,28 @@ def create_employe(employe: schemas.EmployeCreate, db: Session = Depends(get_db)
     return nouvel_employe
 
 @app.get("/employes/", response_model=list[schemas.Employe])
-def get_employes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_employes(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(models.Employe).offset(skip).limit(limit).all()
 
 # ==========================================
 # ROUTES POUR LES ÉQUIPEMENTS ET MOUVEMENTS
 # ==========================================
+def verifier_doublons_equipement(db: Session, equipement: schemas.EquipementCreate, exclure_id: int | None = None):
+    for champ, libelle in ((models.Equipement.reference, "La référence"), (models.Equipement.numero_serie, "Le numéro de série")):
+        valeur = getattr(equipement, champ.key).strip()
+        requete = db.query(models.Equipement).filter(func.lower(func.trim(champ)) == valeur.lower())
+        if exclure_id is not None:
+            requete = requete.filter(models.Equipement.id != exclure_id)
+        existant = requete.first()
+        if existant:
+            raise HTTPException(status_code=400, detail=f"{libelle} « {valeur} » existe déjà (équipement {existant.reference} - {existant.marque} {existant.modele}).")
+
 @app.post("/equipements/", response_model=schemas.Equipement)
 def create_equipement_avec_inventaire(equipement: schemas.EquipementCreate, utilisateur: str = "Admin", db: Session = Depends(get_db)):
-    db_equip = db.query(models.Equipement).filter(models.Equipement.numero_serie == equipement.numero_serie).first()
-    if db_equip:
-        raise HTTPException(status_code=400, detail="Ce numéro de série existe déjà.")
-    
+    equipement.reference = equipement.reference.strip()
+    equipement.numero_serie = equipement.numero_serie.strip()
+    verifier_doublons_equipement(db, equipement)
+
     nouvel_equipement = models.Equipement(**equipement.dict())
     db.add(nouvel_equipement)
     db.commit() 
@@ -136,7 +147,7 @@ def create_equipement_avec_inventaire(equipement: schemas.EquipementCreate, util
     return nouvel_equipement
 
 @app.get("/equipements/", response_model=list[schemas.Equipement])
-def get_equipements(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_equipements(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(models.Equipement).offset(skip).limit(limit).all()
 
 @app.post("/mouvements/", response_model=schemas.Mouvement)
@@ -302,7 +313,7 @@ def delete_employe(employe_id: int, db: Session = Depends(get_db)):
 
 @app.get("/mouvements/", response_model=list[schemas.Mouvement])
 def get_tous_les_mouvements(db: Session = Depends(get_db)):
-    return db.query(models.Mouvement).order_by(models.Mouvement.id.desc()).limit(50).all()
+    return db.query(models.Mouvement).order_by(models.Mouvement.id.desc()).all()
 
 @app.get("/incidents/", response_model=list[schemas.Incident])
 def get_tous_les_incidents(db: Session = Depends(get_db)):
@@ -313,9 +324,10 @@ def update_equipement(equipement_id: int, equipement: schemas.EquipementCreate, 
     db_equip = db.query(models.Equipement).filter(models.Equipement.id == equipement_id).first()
     if not db_equip:
         raise HTTPException(status_code=404, detail="Équipement non trouvé.")
-    
-    db_equip.reference = equipement.reference
-    db_equip.numero_serie = equipement.numero_serie
+    verifier_doublons_equipement(db, equipement, exclure_id=equipement_id)
+
+    db_equip.reference = equipement.reference.strip()
+    db_equip.numero_serie = equipement.numero_serie.strip()
     db_equip.marque = equipement.marque
     db_equip.modele = equipement.modele
     db_equip.categorie = equipement.categorie
