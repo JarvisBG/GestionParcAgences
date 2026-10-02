@@ -17,3 +17,5 @@ build/
 dist/
 *.exe
 *.spec
+.vercel
+.env*
